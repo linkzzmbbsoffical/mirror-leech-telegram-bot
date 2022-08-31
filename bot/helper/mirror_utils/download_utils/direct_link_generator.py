@@ -15,10 +15,11 @@ from json import loads as jsonloads
 from lk21 import Bypass
 from cfscrape import create_scraper
 from bs4 import BeautifulSoup
-from base64 import standard_b64encode
+from base64 import standard_b64encode, b64decode
 from time import sleep
 
 from bot import LOGGER, UPTOBOX_TOKEN, CRYPT
+from lxml import etree
 from bot.helper.ext_utils.bot_utils import is_gdtot_link
 from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
 
