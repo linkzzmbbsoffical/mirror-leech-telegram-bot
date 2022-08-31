@@ -12,8 +12,8 @@ from bot.helper.mirror_utils.status_utils.clone_status import CloneStatus
 from bot import dispatcher, LOGGER, STOP_DUPLICATE, download_dict, download_dict_lock, Interval
 
 from bot import *
-from bot.helper.ext_utils.bot_utils import is_gdrive_link, new_thread, is_gdtot_link
-from bot.helper.mirror_utils.download_utils.direct_link_generator import gdtot
+from bot.helper.ext_utils.bot_utils import is_gdrive_link, is_appdrive_link, new_thread, is_gdtot_link
+from bot.helper.mirror_utils.download_utils.direct_link_generator import gdtot, appdrive
 from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
 
 
@@ -40,10 +40,20 @@ def _clone(message, bot):
             tag = reply_to.from_user.mention_html(reply_to.from_user.first_name)
 
     is_gdtot = is_gdtot_link(link)
+    is_appdrive = is_appdrive_link(link)
     if is_gdtot:
         try:
-            msg = sendMessage(f"Processing: <code>{link}</code>", bot, message)
+            msg = sendMessage(f"Processing GDToT: <code>{link}</code>", bot, message)
             link = gdtot(link)
+            deleteMessage(bot, msg)
+        except DirectDownloadLinkException as e:
+            deleteMessage(bot, msg)
+            return sendMessage(str(e), bot, message)
+    
+    if is_appdrive:
+        msg = sendMessage(f"Processing AppDrive: <code>{link}</code>", bot, message)
+        try:
+            link = appdrive(link)
             deleteMessage(bot, msg)
         except DirectDownloadLinkException as e:
             deleteMessage(bot, msg)
@@ -103,8 +113,11 @@ def _clone(message, bot):
         if is_gdtot:
             LOGGER.info(f"Deleting: {link}")
             gd.deletefile(link)
+        elif is_appdrive:
+            LOGGER.info(f"Deleting: {link}")
+            gd.deletefile(link)
     else:
-        sendMessage("Send Gdrive/Gdtot link along with command or by replying to the link by command\n\n<b>Multi links only by replying to first link/file:</b>\n<code>/cmd</code> 10(number of links/files)", bot, message)
+        sendMessage("Send Gdrive/GDToT/AppDrive link along with command or by replying to the link by command\n\n<b>Multi links only by replying to first link/file:</b>\n<code>/cmd</code> 10(number of links/files)\n\n<b>#LinkZz_MBBS</b>", bot, message)
 
 @new_thread
 
