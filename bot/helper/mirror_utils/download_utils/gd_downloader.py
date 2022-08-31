@@ -8,7 +8,7 @@ from bot.helper.telegram_helper.message_utils import sendMessage, sendStatusMess
 from bot.helper.ext_utils.fs_utils import get_base_name
 
 
-def add_gd_download(link, path, listener, newname, is_gdtot):
+def add_gd_download(link, path, listener, newname):
     res, size, name, files = GoogleDriveHelper().helper(link)
     if res != "":
         return sendMessage(res, listener.bot, listener.message)
