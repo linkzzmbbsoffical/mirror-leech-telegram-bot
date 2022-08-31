@@ -10,6 +10,8 @@ from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.mirror_utils.status_utils.clone_status import CloneStatus
 from bot import dispatcher, LOGGER, STOP_DUPLICATE, download_dict, download_dict_lock, Interval
+
+from bot import *
 from bot.helper.ext_utils.bot_utils import is_gdrive_link, new_thread, is_gdtot_link
 from bot.helper.mirror_utils.download_utils.direct_link_generator import gdtot
 from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
@@ -45,7 +47,8 @@ def _clone(message, bot):
             deleteMessage(bot, msg)
         except DirectDownloadLinkException as e:
             deleteMessage(bot, msg)
-            return sendMessage(str(e), bot, message)    
+            return sendMessage(str(e), bot, message)
+        
     if is_gdrive_link(link):
         gd = GoogleDriveHelper()
         res, size, name, files = gd.helper(link)
@@ -98,6 +101,7 @@ def _clone(message, bot):
             sendMarkup(result + cc, bot, message, button)
             LOGGER.info(f'Cloning Done: {name}')
         if is_gdtot:
+            LOGGER.info(f"Deleting: {link}")
             gd.deletefile(link)
     else:
         sendMessage("Send Gdrive/Gdtot link along with command or by replying to the link by command\n\n<b>Multi links only by replying to first link/file:</b>\n<code>/cmd</code> 10(number of links/files)", bot, message)
