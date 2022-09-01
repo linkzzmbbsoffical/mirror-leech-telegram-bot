@@ -39,9 +39,9 @@ def stats(update, context):
         botVersion = 'No UPSTREAM_REPO'
     total, used, free, disk = disk_usage('/')
     cpuUsage = cpu_percent(interval=1)
+    memory = virtual_memory()
     mem_p = memory.percent
     swap = swap_memory()
-    memory = virtual_memory()
     stats = f'<b>BOT STATISTICS</b>\n'\
             f'<b>┌Uptime:</b> {get_readable_time(time() - botStartTime)}\n'\
             f'<b>├Version: </b>{ botVersion}\n'\
