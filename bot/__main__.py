@@ -18,32 +18,55 @@ from .helper.telegram_helper.button_build import ButtonMaker
 from .modules import authorize, list, cancel_mirror, mirror_status, mirror_leech, clone, ytdlp, shell, eval, delete, count, leech_settings, search, rss, bt_select, sleep
 
 
+def progress_bar(percentage):
+    p_used = '■'
+    p_total = '□'
+    if isinstance(percentage, str):
+        return 'NaN'
+    try:
+        percentage=int(percentage)
+    except:
+        percentage = 0
+    return ''.join(
+        p_used if i <= percentage // 10 else p_total for i in range(1, 11)
+    )
 def stats(update, context):
     if ospath.exists('.git'):
-        last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd <b>From</b> %cr'"], shell=True).decode()
+        last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n├<b>From</b> %cr'"], shell=True).decode()
+        botVersion = check_output(["git log -1 --date=format:v%y.%m%d.%H%M --pretty=format:%cd"], shell=True).decode()
     else:
         last_commit = 'No UPSTREAM_REPO'
+        botVersion = 'No UPSTREAM_REPO'
     total, used, free, disk = disk_usage('/')
+    cpuUsage = cpu_percent(interval=1)
+    mem_p = memory.percent
     swap = swap_memory()
     memory = virtual_memory()
-    stats = f'<b>Commit Date:</b> {last_commit}\n\n'\
-            f'<b>Bot Uptime:</b> {get_readable_time(time() - botStartTime)}\n'\
-            f'<b>OS Uptime:</b> {get_readable_time(time() - boot_time())}\n\n'\
-            f'<b>Total Disk Space:</b> {get_readable_file_size(total)}\n'\
-            f'<b>Used:</b> {get_readable_file_size(used)} | <b>Free:</b> {get_readable_file_size(free)}\n\n'\
-            f'<b>Upload:</b> {get_readable_file_size(net_io_counters().bytes_sent)}\n'\
-            f'<b>Download:</b> {get_readable_file_size(net_io_counters().bytes_recv)}\n\n'\
-            f'<b>CPU:</b> {cpu_percent(interval=0.5)}%\n'\
-            f'<b>RAM:</b> {memory.percent}%\n'\
-            f'<b>DISK:</b> {disk}%\n\n'\
-            f'<b>Physical Cores:</b> {cpu_count(logical=False)}\n'\
-            f'<b>Total Cores:</b> {cpu_count(logical=True)}\n\n'\
-            f'<b>SWAP:</b> {get_readable_file_size(swap.total)} | <b>Used:</b> {swap.percent}%\n'\
-            f'<b>Memory Total:</b> {get_readable_file_size(memory.total)}\n'\
-            f'<b>Memory Free:</b> {get_readable_file_size(memory.available)}\n'\
-            f'<b>Memory Used:</b> {get_readable_file_size(memory.used)}\n'
+    stats = f'<b>BOT STATISTICS</b>\n'\
+            f'<b>┌Uptime:</b> {get_readable_time(time() - botStartTime)}\n'\
+            f'<b>├Version: </b>{ botVersion}\n'\
+            f'<b>├Updated On:</b> {last_commit}\n'\
+            f'<b>└OS Uptime:</b> {get_readable_time(time() - boot_time())}\n\n'\
+            f'<b>CPU</b>\n'\
+            f'┌{progress_bar(cpuUsage)} |{cpuUsage}%\n'\
+            f'<b>├Physical Cores:</b> {cpu_count(logical=False)}\n'\
+            f'<b>└Total Cores:</b> {cpu_count(logical=True)}\n\n'\
+            f'<b>DISK</b>\n'\
+            f'┌{progress_bar(disk)} |{disk}%\n'\
+            f'<b>├Total Space:</b> {get_readable_file_size(total)}\n'\
+            f'<b>├Used:</b> {get_readable_file_size(used)}\n'\
+            f'<b>└Free:</b> {get_readable_file_size(free)}\n\n'\
+            f'<b>RAM</b>\n'\
+            f'┌{progress_bar(mem_p)} |{mem_p}%\n'\
+            f'<b>├Total:</b> {get_readable_file_size(memory.total)}\n'\
+            f'<b>├Free:</b> {get_readable_file_size(memory.available)}\n'\
+            f'<b>└Used:</b> {get_readable_file_size(memory.used)}\n\n'\
+            f'<b>SWAP</b>\n'\
+            f'┌{progress_bar(swap)} |{swap.percent}%\n'\
+            f'<b>├Total:</b> {get_readable_file_size(swap.total)}\n'\
+            f'<b>└Used:</b> {get_readable_file_size(swap.used)}\n\n'\
+            f'<b>Made by #LinkZz_MBBS</b>'
     sendMessage(stats, context.bot, update.message)
-
 
 def start(update, context):
     buttons = ButtonMaker()
