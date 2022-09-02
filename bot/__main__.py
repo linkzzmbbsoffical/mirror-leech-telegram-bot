@@ -4,6 +4,7 @@ from subprocess import run as srun, check_output
 from psutil import disk_usage, cpu_percent, swap_memory, cpu_count, virtual_memory, net_io_counters, boot_time
 from time import time
 from sys import executable
+from telegram import ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler
 
 from bot import bot, dispatcher, updater, botStartTime, IGNORE_PENDING_REQUESTS, LOGGER, Interval, INCOMPLETE_TASK_NOTIFIER, DB_URI, alive, app, main_loop, AUTHORIZED_CHATS
@@ -17,6 +18,7 @@ from .helper.telegram_helper.button_build import ButtonMaker
 
 from .modules import authorize, list, cancel_mirror, mirror_status, mirror_leech, clone, ytdlp, shell, eval, delete, count, leech_settings, search, rss, bt_select, sleep
 
+IMAGE_STATS = "https://graph.org/file/51d01bd752ca54ad24686.jpg"
 
 def progress_bar(percentage):
     p_used = '■'
@@ -66,7 +68,16 @@ def stats(update, context):
             f'<b>├Total:</b> {get_readable_file_size(swap.total)}\n'\
             f'<b>└Used:</b> {get_readable_file_size(swap.used)}\n\n'\
             f'<b>Made by #LinkZz_MBBS</b>'
-    sendMessage(stats, context.bot, update.message)
+    update.effective_message.reply_photo(
+                IMAGE_STATS,
+                stats,
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(
+                    [[
+                         InlineKeyboardButton(
+                             text="LinkZz_MBBS",
+                             url="https://telegram.dog/LinkZz_MBBS"),
+                    ]]))
 
 def start(update, context):
     buttons = ButtonMaker()
