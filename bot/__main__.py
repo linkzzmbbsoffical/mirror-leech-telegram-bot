@@ -34,7 +34,7 @@ def progress_bar(percentage):
     )
 def stats(update, context):
     if ospath.exists('.git'):
-        last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n├<b>From</b> %cr'"], shell=True).decode()
+        last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n<b>├From</b> %cr'"], shell=True).decode()
         botVersion = check_output(["git log -1 --date=format:v%y.%m%d.%H%M --pretty=format:%cd"], shell=True).decode()
     else:
         last_commit = 'No UPSTREAM_REPO'
@@ -50,21 +50,21 @@ def stats(update, context):
             f'<b>├Updated On:</b> {last_commit}\n'\
             f'<b>└OS Uptime:</b> {get_readable_time(time() - boot_time())}\n\n'\
             f'<b>CPU</b>\n'\
-            f'┌{progress_bar(cpuUsage)} |{cpuUsage}%\n'\
+            f'<b>┌</b><code>[{progress_bar(cpuUsage)} |{cpuUsage}%</code>\n'\
             f'<b>├Physical Cores:</b> {cpu_count(logical=False)}\n'\
             f'<b>└Total Cores:</b> {cpu_count(logical=True)}\n\n'\
             f'<b>DISK</b>\n'\
-            f'┌{progress_bar(disk)} |{disk}%\n'\
+            f'<b>┌</b><code>[{progress_bar(disk)} |{disk}%</code>\n'\
             f'<b>├Total Space:</b> {get_readable_file_size(total)}\n'\
             f'<b>├Used:</b> {get_readable_file_size(used)}\n'\
             f'<b>└Free:</b> {get_readable_file_size(free)}\n\n'\
             f'<b>RAM</b>\n'\
-            f'┌{progress_bar(mem_p)} |{mem_p}%\n'\
+            f'<b>┌</b><code>[{progress_bar(mem_p)} |{mem_p}%</code>\n'\
             f'<b>├Total:</b> {get_readable_file_size(memory.total)}\n'\
             f'<b>├Free:</b> {get_readable_file_size(memory.available)}\n'\
             f'<b>└Used:</b> {get_readable_file_size(memory.used)}\n\n'\
             f'<b>SWAP</b>\n'\
-            f'┌{progress_bar(swap)} |{swap.percent}%\n'\
+            f'<b>┌</b><code>[{progress_bar(swap)} |{swap.percent}%</code>\n'\
             f'<b>├Total:</b> {get_readable_file_size(swap.total)}\n'\
             f'<b>└Used:</b> {get_readable_file_size(swap.used)}\n\n'\
             f'<b>Made by #LinkZz_MBBS</b>'
