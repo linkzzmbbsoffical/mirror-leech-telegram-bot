@@ -89,9 +89,10 @@ def start(update, context):
 This bot can mirror all your links to Google Drive or to telegram!
 Type /{BotCommands.HelpCommand} to get a list of available commands
 '''
-        sendMarkup(start_string, context.bot, update.message, reply_markup)
+        update.effective_message.reply_photo(IMAGE_STATS, start_string, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     else:
-        sendMarkup('Not an Authorized user, deploy your own mirror-leech bot\n\n If u Dont Know contact Owner', context.bot, update.message, reply_markup)
+        msg1=f'Not an Authorized user, deploy your own mirror-leech bot\n\n If u Dont Know contact Owner'
+        update.effective_message.reply_photo(IMAGE_STATS, msg1, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 def restart(update, context):
     restart_message = sendMessage("Restarting...", context.bot, update.message)
