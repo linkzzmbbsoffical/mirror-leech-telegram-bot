@@ -147,6 +147,7 @@ def get_readable_message():
                 msg += f" | <b>Time: </b>{download.seeding_time()}"
             else:
                 msg += f"\n<b>Size: </b>{download.size()}"
+            msg += f"\n<b>Engine</b>: {download.engine()}"
             msg += f"\n<b>User:</b> ️<code>{download.message.from_user.first_name}</code>️"
             msg += f"\n<b>Elapsed: </b>{get_readable_time(time() - download.message.date.timestamp())}"
             msg += f"\n<b>To Cancel:</b><code>/{BotCommands.CancelMirror} {download.gid()}</code>"
