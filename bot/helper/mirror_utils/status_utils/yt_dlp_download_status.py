@@ -2,6 +2,8 @@ from bot import DOWNLOAD_DIR
 from bot.helper.ext_utils.bot_utils import MirrorStatus, get_readable_file_size, get_readable_time
 from bot.helper.ext_utils.fs_utils import get_path_size
 
+engine_ = f"yt-dlp v{get_distribution('yt-dlp').version}"
+
 class YtDlpDownloadStatus:
     def __init__(self, obj, listener, gid):
         self.__obj = obj
@@ -56,3 +58,6 @@ class YtDlpDownloadStatus:
 
     def download(self):
         return self.__obj
+    
+    def engine(self):
+        return engine_
