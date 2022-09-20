@@ -112,5 +112,5 @@ class AriaDownloadStatus:
             self.__listener.onDownloadError('Download stopped by user!')
         aria2.remove([self.__download], force=True, files=True)
 
-def engine(self):
-    return engine_
+    def engine(self):
+        return engine_
