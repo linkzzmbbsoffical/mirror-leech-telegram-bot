@@ -66,3 +66,6 @@ class ExtractStatus:
         if self.__listener.suproc is not None:
             self.__listener.suproc.kill()
         self.__listener.onUploadError('extracting stopped by user!')
+    
+    def engine(self):
+        return "7z"
