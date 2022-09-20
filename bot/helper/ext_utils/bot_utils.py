@@ -32,7 +32,7 @@ class MirrorStatus:
     STATUS_SEEDING = "Seeding"
 
 PROGRESS_MAX_SIZE = 100 // 10 
-PROGRESS_INCOMPLETE = ['◔', '◔', '◑', '◑', '◑', '◕', '◕']
+PROGRESS_INCOMPLETE = ['○','◔', '◑', '◕', '⬤', '○','◔', '◑', '◕','⬤']
 
 SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
@@ -104,16 +104,16 @@ def bt_selection_buttons(id_: str):
     return buttons.build_menu(2)
 
 def get_progress_bar_string(status):
-    completed = status.processed_bytes() / 8
-    total = status.size_raw() / 8
+    completed = status.processed_bytes() / 9
+    total = status.size_raw() / 9
     p = 0 if total == 0 else round(completed * 100 / total)
     p = min(max(p, 0), 100)
-    cFull = p // 8
-    cPart = p % 8 - 1
+    cFull = p // 9
+    cPart = p % 9 - 1
     p_str = '⬤' * cFull
     if cPart >= 0:
         p_str += PROGRESS_INCOMPLETE[cPart]
-    p_str += '○' * (PROGRESS_MAX_SIZE - cFull)
+    p_str += "○" * (PROGRESS_MAX_SIZE - cFull)
     p_str = f"「{p_str}」"
     return p_str
 
