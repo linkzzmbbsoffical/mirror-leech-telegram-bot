@@ -1,5 +1,6 @@
 from bot.helper.ext_utils.bot_utils import MirrorStatus, get_readable_file_size, get_readable_time
 
+engine_ = f"Google Api v{get_distribution('google-api-python-client').version}"
 
 class CloneStatus:
     def __init__(self, obj, size, message, gid):
@@ -53,3 +54,6 @@ class CloneStatus:
 
     def download(self):
         return self.__obj
+    
+def engine(self):
+    return engine_
