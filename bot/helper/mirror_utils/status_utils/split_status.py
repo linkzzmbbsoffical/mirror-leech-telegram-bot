@@ -42,3 +42,6 @@ class SplitStatus:
         if self.__listener.suproc is not None:
             self.__listener.suproc.kill()
         self.__listener.onUploadError('splitting stopped by user!')
+    
+    def engine(self):
+        return "ffmpeg/split"
