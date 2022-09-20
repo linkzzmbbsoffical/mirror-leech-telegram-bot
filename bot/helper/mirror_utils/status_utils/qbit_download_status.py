@@ -7,6 +7,7 @@ def get_download(client, uid):
     except Exception as e:
         LOGGER.error(f'{e}: while getting torrent info')
 
+engine_ = f"qBittorrent {get_client().app.version}"
 
 class QbDownloadStatus:
 
@@ -96,3 +97,6 @@ class QbDownloadStatus:
 
     def listener(self):
         return self.__listener
+    
+    def engine(self):
+        return engine_
