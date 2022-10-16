@@ -75,18 +75,12 @@ def getDownloadByGid(gid):
     return None
 
 def getAllDownload(req_status: str, user_id: int = None, onece: bool = True):
-    dls = []
-    with download_dict_lock:
+     with download_dict_lock:
         for dl in list(download_dict.values()):
-            if user_id and user_id != dl.message.from_user.id:
-                continue
             status = dl.status()
             if req_status in ['all', status]:
-                if onece:
-                    return dl
-                else:
-                    dls.append(dl)
-    return None if onece else dls
+                return dl
+    return None
 
 def bt_selection_buttons(id_: str):
     if len(id_) > 20:
@@ -184,17 +178,16 @@ def get_readable_message():
                     up_speed += float(spd.split('K')[0]) * 1024
                 elif 'M' in spd:
                     up_speed += float(spd.split('M')[0]) * 1048576
-        bmsg = f"<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
-        bmsg += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {get_readable_time(time() - botStartTime)}"
+        bmsg += f"\n<b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)} | <b>UPTIME:</b> {get_readable_time(time() - botStartTime)}"
         bmsg += f"\n<b>DL:</b> {get_readable_file_size(dl_speed)}/s | <b>UL:</b> {get_readable_file_size(up_speed)}/s"
         if STATUS_LIMIT is not None and tasks > STATUS_LIMIT:
             msg += f"<b>Page:</b> {PAGE_NO}/{pages} | <b>Tasks:</b> {tasks}\n"
             buttons = ButtonMaker()
-            buttons.sbutton("<<PREVIOUS", "status pre")
-            buttons.sbutton("NEXT>>", "status nex")
-        buttons.sbutton("Statistics", "status stats", footer=True)
-        button = buttons.build_menu(2)
-        return msg + bmsg, button, ""
+            buttons.sbutton("Previous", "status pre")
+            buttons.sbutton("Next", "status nex")
+            button = buttons.build_menu(2)
+            return msg + bmsg, button
+        return msg + bmsg, ""
 
 def turn(data):
     try:
@@ -291,9 +284,3 @@ def get_content_type(link: str) -> str:
         except:
             content_type = None
     return content_type
-
-def update_user_ldata(id_: str, key, value):
-    if id_ in user_data:
-        user_data[id_][key] = value
-    else:
-        user_data[id_] = {key: value}
