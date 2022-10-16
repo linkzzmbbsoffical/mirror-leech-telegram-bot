@@ -81,7 +81,6 @@ def getAllDownload(req_status: str, user_id: int = None, onece: bool = True):
             if req_status in ['all', status]:
                 return dl
     return None
-
 def bt_selection_buttons(id_: str):
     if len(id_) > 20:
         gid = id_[:12]
