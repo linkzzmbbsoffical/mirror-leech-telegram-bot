@@ -1,4 +1,4 @@
-from re import findall as re_findall
+from re import findall as re_findall, match as re_match
 from threading import Thread, Event
 from time import time
 from math import ceil
