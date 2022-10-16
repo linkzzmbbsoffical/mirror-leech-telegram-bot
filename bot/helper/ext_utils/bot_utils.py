@@ -1,4 +1,4 @@
-from re import match as re_match, findall as re_findall
+from re import findall as re_findall
 from threading import Thread, Event
 from time import time
 from math import ceil
@@ -6,7 +6,6 @@ from html import escape
 from psutil import virtual_memory, cpu_percent, disk_usage
 from requests import head as rhead
 from urllib.request import urlopen
-from urllib.parse import urlparse
 
 from bot import download_dict, download_dict_lock, STATUS_LIMIT, botStartTime, DOWNLOAD_DIR, WEB_PINCODE, BASE_URL
 from bot.helper.telegram_helper.bot_commands import BotCommands
@@ -18,22 +17,19 @@ URL_REGEX = r"(?:(?:https?|ftp):\/\/)?[\w/\-?=%.]+\.[\w/\-?=%.]+"
 
 COUNT = 0
 PAGE_NO = 1
-PAGES = 0
+
 
 class MirrorStatus:
-    STATUS_UPLOADING = "Uploading"
-    STATUS_DOWNLOADING = "Downloading"
-    STATUS_CLONING = "Cloning"
-    STATUS_WAITING = "Queued"
-    STATUS_PAUSED = "Paused"
-    STATUS_ARCHIVING = "Archiving"
-    STATUS_EXTRACTING = "Extracting"
-    STATUS_SPLITTING = "Spliting"
-    STATUS_CHECKING = "CheckingUp"
-    STATUS_SEEDING = "Seeding"
-
-PROGRESS_MAX_SIZE = 100 // 10 
-PROGRESS_INCOMPLETE = ['○','◔', '◑', '◕', '⬤', '○','◔', '◑', '◕','⬤']
+    STATUS_UPLOADING = "Upload"
+    STATUS_DOWNLOADING = "Download"
+    STATUS_CLONING = "Clone"
+    STATUS_WAITING = "Queue"
+    STATUS_PAUSED = "Pause"
+    STATUS_ARCHIVING = "Archive"
+    STATUS_EXTRACTING = "Extract"
+    STATUS_SPLITTING = "Split"
+    STATUS_CHECKING = "CheckUp"
+    STATUS_SEEDING = "Seed"
 
 SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
@@ -74,13 +70,14 @@ def getDownloadByGid(gid):
                 return dl
     return None
 
-def getAllDownload(req_status: str, user_id: int = None, onece: bool = True):
-     with download_dict_lock:
+def getAllDownload(req_status: str):
+    with download_dict_lock:
         for dl in list(download_dict.values()):
             status = dl.status()
             if req_status in ['all', status]:
                 return dl
     return None
+
 def bt_selection_buttons(id_: str):
     if len(id_) > 20:
         gid = id_[:12]
@@ -104,17 +101,14 @@ def bt_selection_buttons(id_: str):
     return buttons.build_menu(2)
 
 def get_progress_bar_string(status):
-    completed = status.processed_bytes() / 9
-    total = status.size_raw() / 9
+    completed = status.processed_bytes() / 8
+    total = status.size_raw() / 8
     p = 0 if total == 0 else round(completed * 100 / total)
     p = min(max(p, 0), 100)
-    cFull = p // 9
-    cPart = p % 9 - 1
-    p_str = '⬤' * cFull
-    if cPart >= 0:
-        p_str += PROGRESS_INCOMPLETE[cPart]
-    p_str += "○" * (PROGRESS_MAX_SIZE - cFull)
-    p_str = f"「{p_str}」"
+    cFull = p // 8
+    p_str = '■' * cFull
+    p_str += '□' * (12 - cFull)
+    p_str = f"[{p_str}]"
     return p_str
 
 def get_readable_message():
@@ -147,10 +141,7 @@ def get_readable_message():
                 msg += f" | <b>Time: </b>{download.seeding_time()}"
             else:
                 msg += f"\n<b>Size: </b>{download.size()}"
-            msg += f"\n<b>Engine</b>: {download.engine()}"
-            msg += f"\n<b>User:</b><code>{download.message.from_user.first_name}</code>"
-            msg += f"\n<b>Elapsed: </b>{get_readable_time(time() - download.message.date.timestamp())}"
-            msg += f"\n<b>To Cancel:</b><code>/{BotCommands.CancelMirror} {download.gid()}</code>"
+            msg += f"\n<code>/{BotCommands.CancelMirror} {download.gid()}</code>"
             msg += "\n\n"
             if STATUS_LIMIT is not None and index == STATUS_LIMIT:
                 break
@@ -177,7 +168,8 @@ def get_readable_message():
                     up_speed += float(spd.split('K')[0]) * 1024
                 elif 'M' in spd:
                     up_speed += float(spd.split('M')[0]) * 1048576
-        bmsg += f"\n<b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)} | <b>UPTIME:</b> {get_readable_time(time() - botStartTime)}"
+        bmsg = f"<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)}"
+        bmsg += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {get_readable_time(time() - botStartTime)}"
         bmsg += f"\n<b>DL:</b> {get_readable_file_size(dl_speed)}/s | <b>UL:</b> {get_readable_file_size(up_speed)}/s"
         if STATUS_LIMIT is not None and tasks > STATUS_LIMIT:
             msg += f"<b>Page:</b> {PAGE_NO}/{pages} | <b>Tasks:</b> {tasks}\n"
@@ -234,14 +226,6 @@ def is_url(url: str):
 
 def is_gdrive_link(url: str):
     return "drive.google.com" in url
-
-def is_gdtot_link(url: str):
-    url = re_match(r'https?://.+\.gdtot\.\S+', url)
-    return bool(url)
-
-def is_appdrive_link(url: str):
-    url = re_match(r'https?://(?:\S*\.)?(?:appdrive|driveapp)\.\S+', url)
-    return bool(url)
 
 def is_mega_link(url: str):
     return "mega.nz" in url or "mega.co.nz" in url
