@@ -17,13 +17,16 @@ def mirror_status(update, context):
         currentTime = get_readable_time(time() - botStartTime)
         free = get_readable_file_size(disk_usage(DOWNLOAD_DIR).free)
         message = 'No Active Downloads !\n___________________________'
-        message += f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {currentTime}"
+        message += f"\n<b>CPU:</b> {cpu_percent()}% | <b>FREE:</b> {free}" \
+                   f"\n<b>RAM:</b> {virtual_memory().percent}% | <b>UPTIME:</b> {currentTime}"
         reply_message = sendMessage(message, context.bot, update.message)
         Thread(target=auto_delete_message, args=(context.bot, update.message, reply_message)).start()
     else:
-        sendStatusMessage(update.message, context.bot)
-        deleteMessage(context.bot, update.message)
+        index = update.effective_chat.id
         with status_reply_dict_lock:
+            if index in status_reply_dict:
+                deleteMessage(context.bot, status_reply_dict[index][0])
+                del status_reply_dict[index]
             try:
                 if Interval:
                     Interval[0].cancel()
@@ -32,70 +35,19 @@ def mirror_status(update, context):
                 pass
             finally:
                 Interval.append(setInterval(DOWNLOAD_STATUS_UPDATE_INTERVAL, update_all_messages))
+        sendStatusMessage(update.message, context.bot)
+        deleteMessage(context.bot, update.message)
 
-@new_thread
 def status_pages(update, context):
     query = update.callback_query
-    with download_dict_lock:
-        if len(download_dict) != 0:
-            with status_reply_dict_lock:
-                if not status_reply_dict or not Interval or time() - list(status_reply_dict.values())[0][1] < 2:
-                    query.answer(text="Wait One More Second!\n\nI am not your girlfriend", show_alert=True)
-                    return
     data = query.data
     data = data.split()
-    if data[1] == "ref":
-        query.answer()
-        update_all_messages(True)
-        return
-    elif data[1] =='stats':
-        stat = bot_sys_stats()
-        if stat:
-            query.answer(text=stat, show_alert=True)
-        else:
-            query.answer(text="This status is old now.\n\nI am deleting it.", show_alert=True)
-            query.message.delete()
-        return
+    query.answer()
     done = turn(data)
     if done:
-        query.answer()
         update_all_messages(True)
     else:
-        query.answer(text="This status is old now.\n\nI am deleting it.", show_alert=True)
         query.message.delete()
-
-def bot_sys_stats():
-    with download_dict_lock:
-        if len(download_dict) == 0:
-            return
-        active = upload = extract = archive = split = dsize = 0
-        for stats in list(download_dict.values()):
-            if stats.status() == MirrorStatus.STATUS_DOWNLOADING:
-                active += 1
-                dsize += stats.processed_bytes()
-            if stats.status() == MirrorStatus.STATUS_UPLOADING:
-                upload += 1
-            if stats.status() == MirrorStatus.STATUS_EXTRACTING:
-                extract += 1
-            if stats.status() == MirrorStatus.STATUS_ARCHIVING:
-                archive += 1
-            if stats.status() == MirrorStatus.STATUS_SPLITTING:
-                split += 1
-        status_ls = f"ZIP: {archive} | UZIP: {extract} | SPLIT: {split}\n" \
-                    f"DL: {active} | UP: {upload} | Done: {get_readable_file_size(dsize)}"
-        mem = virtual_memory().percent
-        recv = get_readable_file_size(net_io_counters().bytes_recv)
-        sent = get_readable_file_size(net_io_counters().bytes_sent)
-        free = disk_usage(DOWNLOAD_DIR).free
-        if STORAGE_THRESHOLD:
-            free -= STORAGE_THRESHOLD * 1024**3
-        TDlimits = get_readable_file_size(free)
-        ZUlimits = get_readable_file_size(free / 2)
-        return f"Powered By: LinkZz_MBBS\n" \
-            f"Send: {sent} | Recv: {recv}\n" \
-            f"CPU: {cpu_percent()}% | RAM: {mem}%\n\n" \
-            f"{status_ls}\n" \
-            f"\nLimits: T/D: {TDlimits} | Z/U: {ZUlimits}"
 
 
 mirror_status_handler = CommandHandler(BotCommands.StatusCommand, mirror_status,
