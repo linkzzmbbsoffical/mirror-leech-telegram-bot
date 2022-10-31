@@ -5,7 +5,7 @@ from os import remove, rename, path as ospath, environ
 from subprocess import run as srun, Popen
 from dotenv import load_dotenv
 
-from bot import config_dict, dispatcher, user_data, DB_URI, MAX_SPLIT_SIZE, DRIVES_IDS, DRIVES_NAMES, INDEX_URLS, aria2, GLOBAL_EXTENSION_FILTER, status_reply_dict_lock, Interval, aria2_options, aria2c_global, IS_PREMIUM_USER, download_dict
+from bot import config_dict, dispatcher, user_data, DB_URI, MAX_SPLIT_SIZE, DRIVES_IDS, DRIVES_NAMES, INDEX_URLS, aria2, GLOBAL_EXTENSION_FILTER, status_reply_dict_lock, Interval, aria2_options, aria2c_global, IS_PREMIUM_USER, download_dict, qbit_options, get_client
 from bot.helper.telegram_helper.message_utils import sendFile, sendMarkup, editMessage, update_all_messages
 from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.bot_commands import BotCommands
@@ -274,8 +274,7 @@ def get_buttons(key=None, edit_type=None):
         msg = f'Send private file: config.env, token.pickle, accounts.zip, list_drives.txt, cookies.txt or .netrc.\nTimeout: 60 sec'
     elif key == 'aria':
         for k in list(aria2_options.keys())[START:10+START]:
-            if k not in ['max-download-limit', 'lowest-speed-limit']:
-                buttons.sbutton(k, f"botset editaria {k}")
+            buttons.sbutton(k, f"botset editaria {k}")
         if STATE == 'view':
             buttons.sbutton('Edit', "botset edit aria")
         else:
@@ -287,7 +286,17 @@ def get_buttons(key=None, edit_type=None):
             buttons.sbutton(int(x/10), f"botset start aria {x}", position='footer')
         msg = f'Aria2c Options. Page: {int(START/10)}. State: {STATE}'
     elif key == 'qbit':
-        pass
+        for k in list(qbit_options.keys())[START:10+START]:
+            buttons.sbutton(k, f"botset editqbit {k}")
+        if STATE == 'view':
+            buttons.sbutton('Edit', "botset edit qbit")
+        else:
+            buttons.sbutton('View', "botset view qbit")
+        buttons.sbutton('Back', "botset back")
+        buttons.sbutton('Close', "botset close")
+        for x in range(0, len(qbit_options)-1, 10):
+            buttons.sbutton(int(x/10), f"botset start qbit {x}", position='footer')
+        msg = f'Qbittorrent Options. Page: {int(START/10)}. State: {STATE}'
     elif edit_type == 'editvar':
         buttons.sbutton('Back', "botset back var")
         if key not in ['TELEGRAM_HASH', 'TELEGRAM_API']:
@@ -381,6 +390,25 @@ def edit_aria(update, context, omsg, key):
     if DB_URI:
         DbManger().update_aria2(key, value)
 
+def edit_qbit(update, context, omsg, key):
+    handler_dict[omsg.chat.id] = False
+    value = update.message.text
+    if value.lower() == 'true':
+        value = True
+    elif value.lower() == 'false':
+        value = False
+    elif key == 'max_ratio':
+        value = float(value)
+    elif value.isdigit():
+        value = int(value)
+    client = get_client()
+    client.app_set_preferences({key: value})
+    qbit_options[key] = value
+    update_buttons(omsg, 'qbit')
+    update.message.delete()
+    if DB_URI:
+        DbManger().update_qbittorrent(key, value)
+
 def upload_file(update, context, omsg):
     handler_dict[omsg.chat.id] = False
     doc = update.message.document
@@ -452,9 +480,9 @@ def edit_bot_settings(update, context):
         handler_dict[message.chat.id] = False
         key = data[2] if len(data) == 3 else None
         update_buttons(message, key)
-    elif data[1] == 'var':
+    elif data[1] in ['var', 'aria', 'qbit']:
         query.answer()
-        update_buttons(message, 'var')
+        update_buttons(message, data[1])
     elif data[1] == 'resetvar':
         query.answer()
         value = ''
@@ -557,7 +585,7 @@ def edit_bot_settings(update, context):
         dispatcher.remove_handler(value_handler)
     elif data[1] == 'editaria' and STATE == 'view':
         value = aria2_options[data[2]]
-        if len(str(value)) > 200:
+        if len(value) > 200:
             query.answer()
             filename = f"{data[2]}.txt"
             with open(filename, 'w', encoding='utf-8') as f:
@@ -585,7 +613,17 @@ def edit_bot_settings(update, context):
                 update_buttons(message, 'var')
         dispatcher.remove_handler(value_handler)
     elif data[1] == 'editqbit' and STATE == 'view':
-        pass
+        value = qbit_options[data[2]]
+        if len(str(value)) > 200:
+            query.answer()
+            filename = f"{data[2]}.txt"
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f'{value}')
+            sendFile(context.bot, message, filename)
+            return
+        elif value == '':
+            value = None
+        query.answer(text=f'{value}', show_alert=True)
     elif data[1] == 'edit':
         query.answer()
         globals()['STATE'] = 'edit'
@@ -606,11 +644,6 @@ def edit_bot_settings(update, context):
                 && git push origin {config_dict['UPSTREAM_BRANCH']} -q"], shell=True)
         query.message.delete()
         query.message.reply_to_message.delete()
-    elif data[1] == 'aria':
-        query.answer()
-        update_buttons(message, data[1])
-    elif data[1] == 'qbit':
-        query.answer(text='Soon!', show_alert=True)
 
 
 def bot_settings(update, context):
