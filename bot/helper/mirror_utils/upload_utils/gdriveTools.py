@@ -1,6 +1,6 @@
 from logging import getLogger, ERROR
 from time import time
-from pickle import load as pload
+from pickle import load as pload, dump as pdump
 from json import loads as jsnloads
 from os import makedirs, path as ospath, listdir, remove as osremove
 from requests.utils import quote as rquote
@@ -12,13 +12,14 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from google.auth.transport.requests import Request
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type, RetryError
 
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot import config_dict, DRIVES_NAMES, DRIVES_IDS, INDEX_URLS, GLOBAL_EXTENSION_FILTER
 from bot.helper.ext_utils.bot_utils import get_readable_file_size, setInterval
 from bot.helper.ext_utils.fs_utils import get_mime_type
-from bot.helper.ext_utils.html_helper import hmtl_content
+from bot.helper.ext_utils.telegraph_helper import telegraph
 
 LOGGER = getLogger(__name__)
 getLogger('googleapiclient.discovery').setLevel(ERROR)
@@ -88,6 +89,11 @@ class GoogleDriveHelper:
         elif ospath.exists(self.__G_DRIVE_TOKEN_FILE):
             with open(self.__G_DRIVE_TOKEN_FILE, 'rb') as f:
                 credentials = pload(f)
+            if credentials and not credentials.valid and credentials.expired and credentials.refresh_token:
+                LOGGER.warning('Your token is expired! Refreshing Token...')
+                credentials.refresh(Request())
+                with open(self.__G_DRIVE_TOKEN_FILE, 'wb') as token:
+                    pdump(credentials, token)
         else:
             LOGGER.error('token.pickle not found!')
         return build('drive', 'v3', credentials=credentials, cache_discovery=False)
@@ -100,6 +106,11 @@ class GoogleDriveHelper:
                 LOGGER.info("Authorize with token.pickle")
                 with open(self.__G_DRIVE_TOKEN_FILE, 'rb') as f:
                     credentials = pload(f)
+                if credentials and not credentials.valid and credentials.expired and credentials.refresh_token:
+                    LOGGER.warning('Your token is expired! Refreshing Token...')
+                    credentials.refresh(Request())
+                    with open(self.__G_DRIVE_TOKEN_FILE, 'wb') as token:
+                        pdump(credentials, token)
                 return build('drive', 'v3', credentials=credentials, cache_discovery=False)
         return None
 
@@ -526,6 +537,8 @@ class GoogleDriveHelper:
         msg = ""
         fileName = self.__escapes(str(fileName))
         contents_count = 0
+        telegraph_content = []
+        path = []
         Title = False
         if len(DRIVES_IDS) > 1:
             token_service = self.__alt_authorize()
@@ -540,61 +553,70 @@ class GoogleDriveHelper:
                 else:
                     continue
             if not Title:
-                msg += '<span class="container center rfontsize">' \
-                      f'<h4>Search Result For {fileName}</h4></span>'
+                msg += f'<h4>Search Result For {fileName}</h4>'
                 Title = True
             if drive_name:
-                msg += '<span class="container center rfontsize">' \
-                      f'<b>{drive_name}</b></span>'
+                msg += f"╾────────────╼<br><b>{drive_name}</b><br>╾────────────╼<br>"
             for file in response.get('files', []):
                 mime_type = file.get('mimeType')
                 if mime_type == "application/vnd.google-apps.folder":
                     furl = f"https://drive.google.com/drive/folders/{file.get('id')}"
-                    msg += '<span class="container start rfontsize">' \
-                          f"<div>📁 {file.get('name')} (folder)</div>" \
-                           '<div class="dlinks">' \
-                          f'<span> <a class="forhover" href="{furl}">Drive Link</a></span>'
+                    msg += f"📁 <code>{file.get('name')}<br>(folder)</code><br>"
+                    msg += f"<b><a href={furl}>Drive Link</a></b>"
                     if index_url:
                         if isRecur:
                             url_path = "/".join([rquote(n, safe='') for n in self.__get_recursive_list(file, dir_id)])
                         else:
                             url_path = rquote(f'{file.get("name")}', safe='')
-                        msg += '<span> | </span>' \
-                            f'<span> <a class="forhover" href="{index_url}/{url_path}/">Index Link</a></span>'
+                        url = f'{index_url}/{url_path}/'
+                        msg += f' <b>| <a href="{url}">Index Link</a></b>'
                 elif mime_type == 'application/vnd.google-apps.shortcut':
                     furl = f"https://drive.google.com/drive/folders/{file.get('id')}"
-                    msg += '<span class="container start rfontsize">' \
-                          f"<div>📁 {file.get('name')} (shortcut)</div>" \
-                           '<div class="dlinks">' \
-                          f'<span> <a class="forhover" href="{furl}">Drive Link</a></span>'\
-                           '</div></span>'
+                    msg += f"⁍<a href='https://drive.google.com/drive/folders/{file.get('id')}'>{file.get('name')}" \
+                           f"</a> (shortcut)"
                 else:
                     furl = f"https://drive.google.com/uc?id={file.get('id')}&export=download"
-                    msg += '<span class="container start rfontsize">' \
-                          f"<div>📄 {file.get('name')} ({get_readable_file_size(int(file.get('size', 0)))})</div>" \
-                           '<div class="dlinks">' \
-                          f'<span> <a class="forhover" href="{furl}">Drive Link</a></span>'
+                    msg += f"📄 <code>{file.get('name')}<br>({get_readable_file_size(int(file.get('size', 0)))})</code><br>"
+                    msg += f"<b><a href={furl}>Drive Link</a></b>"
                     if index_url:
                         if isRecur:
                             url_path = "/".join(rquote(n, safe='') for n in self.__get_recursive_list(file, dir_id))
                         else:
                             url_path = rquote(f'{file.get("name")}')
-                        msg += '<span> | </span>' \
-                            f'<span> <a class="forhover" href="{index_url}/{url_path}">Index Link</a></span>'
+                        url = f'{index_url}/{url_path}'
+                        msg += f' <b>| <a href="{url}">Index Link</a></b>'
                         if config_dict['VIEW_LINK']:
-                            msg += '<span> | </span>' \
-                                f'<span> <a class="forhover" href="{index_url}/{url_path}?a=view">View Link</a></span>'
-                msg += '</div></span>'
+                            urlv = f'{index_url}/{url_path}?a=view'
+                            msg += f' <b>| <a href="{urlv}">View Link</a></b>'
+                msg += '<br><br>'
                 contents_count += 1
+                if len(msg.encode('utf-8')) > 39000:
+                    telegraph_content.append(msg)
+                    msg = ""
             if noMulti:
                 break
-        if contents_count == 0:
-            return "", ""
-        cap = f"<b>Found {contents_count} result for <i>{fileName}</i></b>"
-        f_name = f'{fileName}_{time()}.html'
-        with open(f_name, 'w', encoding='utf-8') as f:
-            f.write(hmtl_content.replace('{fileName}', fileName).replace('{msg}', msg))
-        return cap, f_name
+
+        if msg != '':
+            telegraph_content.append(msg)
+
+        if len(telegraph_content) == 0:
+            return "", None
+
+        for content in telegraph_content:
+            path.append(
+                telegraph.create_page(
+                    title='Mirror-Leech-Bot Drive Search',
+                    content=content
+                )["path"]
+            )
+        if len(path) > 1:
+            telegraph.edit_telegraph(path, telegraph_content)
+
+        msg = f"<b>Found {contents_count} result for <i>{fileName}</i></b>"
+        buttons = ButtonMaker()
+        buttons.buildbutton("🔎 VIEW", f"https://telegra.ph/{path[0]}")
+
+        return msg, buttons.build_menu(1)
 
     def count(self, link):
         try:
