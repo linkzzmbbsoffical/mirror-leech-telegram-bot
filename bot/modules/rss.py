@@ -56,6 +56,7 @@ def rss_sub(update, context):
         title = args[1].strip()
         feed_link = args[2].strip()
         f_lists = []
+        filters = None
 
         if len(args) == 4:
             filters = args[3].lstrip().lower()
@@ -67,8 +68,6 @@ def rss_sub(update, context):
                    f_lists.append(y)
             else:
                 filters = None
-        else:
-            filters = None
 
         exists = rss_dict.get(title)
         if exists:
@@ -200,8 +199,8 @@ def rss_monitor(context):
                     LOGGER.warning(f"Reached Max index no. {feed_count} for this feed: {title}. Maybe you need to use less RSS_DELAY to not miss some torrents")
                     break
                 parse = True
-                for list in data['filters']:
-                    if all(x not in str(rss_d.entries[feed_count]['title']).lower() for x in list):
+                for flist in data['filters']:
+                    if all(x not in str(rss_d.entries[feed_count]['title']).lower() for x in flist):
                         parse = False
                         feed_count += 1
                         break
