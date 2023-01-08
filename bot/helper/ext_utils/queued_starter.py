@@ -28,6 +28,7 @@ def start_up_from_queued(uid):
 def start_from_queued():
     if all_limit := config_dict['QUEUE_ALL']:
         dl_limit = config_dict['QUEUE_DOWNLOAD']
+        up_limit = config_dict['QUEUE_UPLOAD']
         with queue_dict_lock:
             dl = len(non_queued_dl)
             up = len(non_queued_up)
@@ -63,7 +64,7 @@ def start_from_queued():
                 for uid in list(queued_up.keys()):
                     start_up_from_queued(uid)
 
-    if dl_limit := config_dict['QUEUE_ALL']:
+    if dl_limit := config_dict['QUEUE_DOWNLOAD']:
         with queue_dict_lock:
             dl = len(non_queued_dl)
             if queued_dl and dl <  dl_limit:
