@@ -4,12 +4,12 @@ from bot.helper.ext_utils.bot_utils import get_readable_file_size, MirrorStatus
 
 
 class QueueStatus:
-    def __init__(self, name, size, gid, listener, state):
+    def __init__(self, name, size, gid, listener, status):
         self.__name = name
         self.__size = size
         self.__gid = gid
         self.__listener = listener
-        self.__state = state
+        self.__status = status
         self.message = listener.message
 
     def gid(self):
@@ -18,14 +18,11 @@ class QueueStatus:
     def name(self):
         return self.__name
 
-    def size_raw(self):
-        return self.__size
-
     def size(self):
         return get_readable_file_size(self.__size)
 
     def status(self):
-        if self.__state == 'Dl':
+        if self.__status == 'Dl':
             return MirrorStatus.STATUS_QUEUEDL
         else:
             return MirrorStatus.STATUS_QUEUEUP

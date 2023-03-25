@@ -6,7 +6,7 @@ from asyncio import sleep
 from bot import aria2, download_dict_lock, download_dict, LOGGER, config_dict, aria2_options, aria2c_global
 from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
 from bot.helper.ext_utils.bot_utils import getDownloadByGid, bt_selection_buttons, new_thread, sync_to_async
-from bot.helper.mirror_utils.status_utils.aria_download_status import AriaDownloadStatus
+from bot.helper.mirror_utils.status_utils.aria_status import Aria2Status
 from bot.helper.telegram_helper.message_utils import sendStatusMessage, sendMessage, deleteMessage, update_all_messages
 from bot.helper.ext_utils.fs_utils import get_base_name, clean_unwanted
 
@@ -25,40 +25,40 @@ async def __onDownloadStarted(api, gid):
                 while True:
                     await sleep(0.5)
                     if download.is_removed or download.followed_by_ids:
-                        await deleteMessage(listener.message, meta)
+                        await deleteMessage(meta)
                         break
                     download = download.live
         return
     else:
         LOGGER.info(f'onDownloadStarted: {download.name} - Gid: {gid}')
-    try:
-        if config_dict['STOP_DUPLICATE']:
-            await sleep(1)
-            if dl := await getDownloadByGid(gid):
-                listener = dl.listener()
-                if listener.isLeech or listener.select:
-                    return
-                download = await sync_to_async(api.get_download, gid)
-                if not download.is_torrent:
-                    await sleep(3)
-                    download = download.live
-                LOGGER.info('Checking File/Folder if already in Drive...')
-                sname = download.name
-                if listener.isZip:
-                    sname = f"{sname}.zip"
-                elif listener.extract:
-                    try:
-                        sname = get_base_name(sname)
-                    except:
-                        sname = None
-                if sname is not None:
-                    smsg, button = await sync_to_async(GoogleDriveHelper().drive_list, sname, True)
-                    if smsg:
-                        smsg = 'File/Folder already available in Drive.\nHere are the search results:'
-                        await listener.onDownloadError(smsg, button)
-                        await sync_to_async(api.remove, [download], force=True, files=True)
-    except Exception as e:
-        LOGGER.error(f"{e} onDownloadStart: {gid} check duplicate didn't pass")
+    if config_dict['STOP_DUPLICATE']:
+        await sleep(1)
+        if dl := await getDownloadByGid(gid):
+            if not hasattr(dl, 'listener'):
+                LOGGER.warning(f"onDownloadStart: {gid}. STOP_DUPLICATE didn't pass since download completed earlier!")
+                return
+            listener = dl.listener()
+            if listener.isLeech or listener.select:
+                return
+            download = await sync_to_async(api.get_download, gid)
+            if not download.is_torrent:
+                await sleep(3)
+                download = download.live
+            LOGGER.info('Checking File/Folder if already in Drive...')
+            sname = download.name
+            if listener.isZip:
+                sname = f"{sname}.zip"
+            elif listener.extract:
+                try:
+                    sname = get_base_name(sname)
+                except:
+                    sname = None
+            if sname is not None:
+                smsg, button = await sync_to_async(GoogleDriveHelper().drive_list, sname, True)
+                if smsg:
+                    smsg = 'File/Folder already available in Drive.\nHere are the search results:'
+                    await listener.onDownloadError(smsg, button)
+                    await sync_to_async(api.remove, [download], force=True, files=True)
 
 @new_thread
 async def __onDownloadComplete(api, gid):
@@ -131,7 +131,7 @@ async def __onBtDownloadComplete(api, gid):
                     if listener.uid not in download_dict:
                         await sync_to_async(api.remove, [download], force=True, files=True)
                         return
-                    download_dict[listener.uid] = AriaDownloadStatus(gid, listener, True)
+                    download_dict[listener.uid] = Aria2Status(gid, listener, True)
                     download_dict[listener.uid].start_time = seed_start_time
                 LOGGER.info(f"Seeding started: {download.name} - Gid: {gid}")
                 await update_all_messages()
@@ -191,11 +191,17 @@ async def add_aria2c_download(link, path, listener, filename, auth, ratio, seed_
         LOGGER.info(f"Download Error: {error}")
         await sendMessage(listener.message, error)
         return
+    gid = download.gid
     async with download_dict_lock:
-        download_dict[listener.uid] = AriaDownloadStatus(download.gid, listener)
-        LOGGER.info(f"Aria2Download started: {download.gid}")
+        download_dict[listener.uid] = Aria2Status(gid, listener)
+        LOGGER.info(f"Aria2Download started: {gid}")
     await listener.onDownloadStart()
-    if not listener.select:
+    if not listener.select or not config_dict['BASE_URL']:
         await sendStatusMessage(listener.message)
+    elif download.is_torrent and not download.is_metadata:
+        await sync_to_async(aria2.client.force_pause, gid)
+        SBUTTONS = bt_selection_buttons(gid)
+        msg = "Your download paused. Choose files then press Done Selecting button to start downloading."
+        await sendMessage(listener.message, msg, SBUTTONS)
 
 start_listener()

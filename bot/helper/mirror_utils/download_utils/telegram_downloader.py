@@ -38,7 +38,7 @@ class TelegramDownloadHelper:
         self.size = size
         self.__id = file_id
         async with download_dict_lock:
-            download_dict[self.__listener.uid] = TelegramDownloadStatus(self, self.__listener, file_id[:12])
+            download_dict[self.__listener.uid] = TelegramDownloadStatus(self, self.__listener.message, file_id[:12])
         async with queue_dict_lock:
             non_queued_dl.add(self.__listener.uid)
         if not from_queue:
@@ -69,9 +69,9 @@ class TelegramDownloadHelper:
         await self.__listener.onDownloadError(error)
 
     async def __onDownloadComplete(self):
+        await self.__listener.onDownloadComplete()
         async with global_lock:
             GLOBAL_GID.remove(self.__id)
-        await self.__listener.onDownloadComplete()
 
     async def __download(self, message, path):
         try:

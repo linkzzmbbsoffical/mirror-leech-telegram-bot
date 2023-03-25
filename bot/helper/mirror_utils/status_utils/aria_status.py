@@ -9,10 +9,10 @@ def get_download(gid):
         return aria2.get_download(gid)
     except Exception as e:
         LOGGER.error(f'{e}: Aria2c, Error while getting torrent info')
-        return get_download(gid)
+        return None
 
 
-class AriaDownloadStatus:
+class Aria2Status:
 
     def __init__(self, gid, listener, seeding=False):
         self.__gid = gid
@@ -25,11 +25,11 @@ class AriaDownloadStatus:
     def __update(self):
         if self.__download is None:
             self.__download = get_download(self.__gid)
-        elif self.__download.followed_by_ids:
-            self.__gid = self.__download.followed_by_ids[0]
-            self.__download = get_download(self.__gid)
         else:
             self.__download = self.__download.live
+        if self.__download.followed_by_ids:
+            self.__gid = self.__download.followed_by_ids[0]
+            self.__download = get_download(self.__gid)
 
     def progress(self):
         """
@@ -38,15 +38,8 @@ class AriaDownloadStatus:
         """
         return self.__download.progress_string()
 
-    def size_raw(self):
-        """
-        Gets total size of the mirror file/folder
-        :return: total size of mirror
-        """
-        return self.__download.total_length
-
     def processed_bytes(self):
-        return self.__download.completed_length
+        return self.__download.completed_length_string()
 
     def speed(self):
         self.__update()

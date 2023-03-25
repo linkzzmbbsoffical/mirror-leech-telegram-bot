@@ -7,7 +7,7 @@ from bot import bot, aria2, download_dict, download_dict_lock, OWNER_ID, user_da
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.telegram_helper.message_utils import sendMessage, sendStatusMessage
-from bot.helper.ext_utils.bot_utils import async_to_sync, getDownloadByGid, MirrorStatus, bt_selection_buttons, sync_to_async
+from bot.helper.ext_utils.bot_utils import getDownloadByGid, MirrorStatus, bt_selection_buttons, sync_to_async
 
 
 async def select(client, message):
@@ -27,9 +27,9 @@ async def select(client, message):
             await sendMessage(message, "This is not an active task!")
             return
     elif len(msg) == 1:
-        msg = "Reply to an active /cmd which was used to start the qb-download or add gid along with cmd\n\n"
-        msg += "This command mainly for selection incase you decided to select files from already added torrent. "
-        msg += "But you can always use /cmd with arg `s` to select files before download start."
+        msg = ("Reply to an active /cmd which was used to start the qb-download or add gid along with cmd\n\n"
+             + "This command mainly for selection incase you decided to select files from already added torrent. "
+             + "But you can always use /cmd with arg `s` to select files before download start.")
         await sendMessage(message, msg)
         return
 
@@ -110,7 +110,7 @@ async def get_confirm(client, query):
                     except:
                         pass
             try:
-                await async_to_sync(aria2.client.unpause, id_)
+                await sync_to_async(aria2.client.unpause, id_)
             except Exception as e:
                 LOGGER.error(f"{e} Error in resume, this mostly happens after abuse aria2. Try to use select cmd again!")
         await sendStatusMessage(message)

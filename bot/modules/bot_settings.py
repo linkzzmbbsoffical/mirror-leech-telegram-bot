@@ -5,10 +5,11 @@ from functools import partial
 from asyncio import create_subprocess_exec, create_subprocess_shell, sleep
 from aiofiles.os import remove, rename, path as aiopath
 from aiofiles import open as aiopen
-from os import environ
+from os import environ, getcwd
 from dotenv import load_dotenv
 from time import time
 from io import BytesIO
+from aioshutil import rmtree as aiormtree
 
 from bot import config_dict, user_data, DATABASE_URL, MAX_SPLIT_SIZE, DRIVES_IDS, DRIVES_NAMES, INDEX_URLS, aria2, GLOBAL_EXTENSION_FILTER, status_reply_dict_lock, Interval, aria2_options, aria2c_global, IS_PREMIUM_USER, download_dict, qbit_options, get_client, LOGGER, bot
 from bot.helper.telegram_helper.message_utils import sendMessage, sendFile, editMessage, update_all_messages
@@ -66,6 +67,18 @@ async def load_config():
     if len(GDRIVE_ID) == 0:
         GDRIVE_ID = ''
 
+    RCLONE_PATH = environ.get('RCLONE_PATH', '')
+    if len(RCLONE_PATH) == 0:
+        RCLONE_PATH = ''
+
+    DEFAULT_UPLOAD = environ.get('DEFAULT_UPLOAD', '')
+    if DEFAULT_UPLOAD != 'rc':
+        DEFAULT_UPLOAD = 'gd'
+
+    RCLONE_FLAGS = environ.get('RCLONE_FLAGS', '')
+    if len(RCLONE_FLAGS) == 0:
+        RCLONE_FLAGS = ''
+
     AUTHORIZED_CHATS = environ.get('AUTHORIZED_CHATS', '')
     if len(AUTHORIZED_CHATS) != 0:
         aid = AUTHORIZED_CHATS.split()
@@ -84,6 +97,8 @@ async def load_config():
         GLOBAL_EXTENSION_FILTER.clear()
         GLOBAL_EXTENSION_FILTER.append('.aria2')
         for x in fx:
+            if x.strip().startswith('.'):
+                x = x.lstrip('.')
             GLOBAL_EXTENSION_FILTER.append(x.strip().lower())
 
     MEGA_API_KEY = environ.get('MEGA_API_KEY', '')
@@ -153,7 +168,7 @@ async def load_config():
     DUMP_CHAT = '' if len(DUMP_CHAT) == 0 else int(DUMP_CHAT)
 
     STATUS_LIMIT = environ.get('STATUS_LIMIT', '')
-    STATUS_LIMIT = '' if len(STATUS_LIMIT) == 0 else int(STATUS_LIMIT)
+    STATUS_LIMIT = 10 if len(STATUS_LIMIT) == 0 else int(STATUS_LIMIT)
 
     RSS_CHAT_ID = environ.get('RSS_CHAT_ID', '')
     RSS_CHAT_ID = '' if len(RSS_CHAT_ID) == 0 else int(RSS_CHAT_ID)
@@ -274,6 +289,7 @@ async def load_config():
                         'BOT_TOKEN': BOT_TOKEN,
                         'CMD_SUFFIX': CMD_SUFFIX,
                         'DATABASE_URL': DATABASE_URL,
+                        'DEFAULT_UPLOAD': DEFAULT_UPLOAD,
                         'DOWNLOAD_DIR': DOWNLOAD_DIR,
                         'DUMP_CHAT': DUMP_CHAT,
                         'EQUAL_SPLITS': EQUAL_SPLITS,
@@ -292,6 +308,8 @@ async def load_config():
                         'QUEUE_ALL': QUEUE_ALL,
                         'QUEUE_DOWNLOAD': QUEUE_DOWNLOAD,
                         'QUEUE_UPLOAD': QUEUE_UPLOAD,
+                        'RCLONE_FLAGS': RCLONE_FLAGS,
+                        'RCLONE_PATH': RCLONE_PATH,
                         'RSS_CHAT_ID': RSS_CHAT_ID,
                         'RSS_DELAY': RSS_DELAY,
                         'SEARCH_API_LINK': SEARCH_API_LINK,
@@ -418,7 +436,7 @@ async def edit_variable(client, message, pre_message, key):
         addJob(value)
     elif key == 'DOWNLOAD_DIR':
         if not value.endswith('/'):
-            value = f'{value}/'
+            value += '/'
     elif key in ['DUMP_CHAT', 'RSS_CHAT_ID']:
         value = int(value)
     elif key == 'STATUS_UPDATE_INTERVAL':
@@ -450,6 +468,8 @@ async def edit_variable(client, message, pre_message, key):
         GLOBAL_EXTENSION_FILTER.clear()
         GLOBAL_EXTENSION_FILTER.append('.aria2')
         for x in fx:
+            if x.strip().startswith('.'):
+                x = x.lstrip('.')
             GLOBAL_EXTENSION_FILTER.append(x.strip().lower())
     elif key == 'GDRIVE_ID':
         if DRIVES_NAMES and DRIVES_NAMES[0] == 'Main':
@@ -518,14 +538,13 @@ async def edit_qbit(client, message, pre_message, key):
 
 async def update_private_file(client, message, pre_message):
     handler_dict[message.chat.id] = False
-    if not message.media and message.text:
-        file_name = message.text
+    if not message.media and (file_name := message.text):
         fn = file_name.rsplit('.zip', 1)[0]
         if await aiopath.isfile(fn):
             await remove(fn)
         if fn == 'accounts':
             if await aiopath.exists('accounts'):
-                await (await create_subprocess_exec("rm", "-rf", "accounts")).wait()
+                await aiormtree('accounts')
             config_dict['USE_SERVICE_ACCOUNTS'] = False
             if DATABASE_URL:
                 await DbManger().update_config({'USE_SERVICE_ACCOUNTS': False})
@@ -534,13 +553,12 @@ async def update_private_file(client, message, pre_message):
             await (await create_subprocess_exec("chmod", "600", ".netrc")).wait()
             await (await create_subprocess_exec("cp", ".netrc", "/root/.netrc")).wait()
         await message.delete()
-    elif message.document:
-        doc = message.document
+    elif doc := message.document:
         file_name = doc.file_name
-        await message.download(file_name=f'/usr/src/app/{file_name}')
+        await message.download(file_name=f'{getcwd()}/{file_name}')
         if file_name == 'accounts.zip':
             if await aiopath.exists('accounts'):
-                await (await create_subprocess_exec("rm", "-rf", "accounts")).wait()
+                await aiormtree('accounts')
             await (await create_subprocess_exec("7z", "x", "-o.", "-aoa", "accounts.zip", "accounts/*.json")).wait()
             await (await create_subprocess_exec("chmod", "-R", "777", "accounts")).wait()
         elif file_name == 'list_drives.txt':
@@ -589,8 +607,8 @@ async def event_handler(client, query, pfunc, rfunc, document=False):
     handler_dict[chat_id] = True
     start_time = time()
     async def event_filter(_, __, event):
-        return bool(event.from_user.id == query.from_user.id and event.chat.id == chat_id and
-                    (event.text or event.document and document))
+        user = event.from_user or event.sender_chat
+        return bool(user.id == query.from_user.id and event.chat.id == chat_id and (event.text or event.document and document))
     handler = client.add_handler(MessageHandler(pfunc, filters=create(event_filter)), group=-1)
     while handler_dict[chat_id]:
         await sleep(0.5)
@@ -788,13 +806,13 @@ async def edit_bot_settings(client, query):
         filename = data[2].rsplit('.zip', 1)[0]
         if await aiopath.exists(filename):
             await (await create_subprocess_shell(f"git add -f {filename} \
-                                            && git commit -sm botsettings -q \
-                                            && git push origin {config_dict['UPSTREAM_BRANCH']} -q")).wait()
+                                                   && git commit -sm botsettings -q \
+                                                   && git push origin {config_dict['UPSTREAM_BRANCH']} -qf")).wait()
         else:
             await (await create_subprocess_shell(f"git rm -r --cached {filename} \
-                                            && git commit -sm botsettings -q \
-                                            && git push origin {config_dict['UPSTREAM_BRANCH']} -q")).wait()
-        await message.reply_to_mssage.delete()
+                                                   && git commit -sm botsettings -q \
+                                                   && git push origin {config_dict['UPSTREAM_BRANCH']} -qf")).wait()
+        await message.reply_to_message.delete()
         await message.delete()
 
 async def bot_settings(client, message):
