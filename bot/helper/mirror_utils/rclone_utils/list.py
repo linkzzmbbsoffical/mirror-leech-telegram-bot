@@ -6,7 +6,6 @@ from configparser import ConfigParser
 from pyrogram.handlers import CallbackQueryHandler
 from pyrogram.filters import regex, user
 from functools import partial
-from math import ceil
 from json import loads
 from time import time
 
@@ -130,7 +129,7 @@ class RcloneList:
 
     async def get_path_buttons(self):
         items_no = len(self.path_list)
-        pages = ceil(items_no/LIST_LIMIT)
+        pages = (items_no + LIST_LIMIT - 1) // LIST_LIMIT
         if items_no <= self.iter_start:
             self.iter_start = 0
         elif self.iter_start < 0 or self.iter_start > items_no:
@@ -186,7 +185,7 @@ class RcloneList:
         res, err, code = await cmd_exec(cmd)
         if code not in [0, -9]:
             LOGGER.error(f'While rclone listing. Path: {self.remote}{self.path}. Stderr: {err}')
-            self.remote = err[:4090]
+            self.remote = err[:4000]
             self.path = ''
             self.event.set()
             return
