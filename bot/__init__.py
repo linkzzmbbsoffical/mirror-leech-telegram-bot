@@ -11,14 +11,13 @@ from subprocess import Popen, run as srun
 from os import remove as osremove, path as ospath, environ, getcwd
 from aria2p import API as ariaAPI, Client as ariaClient
 from qbittorrentapi import Client as qbClient
-from faulthandler import enable as faulthandler_enable
+# from faulthandler import enable as faulthandler_enable
 from socket import setdefaulttimeout
 from logging import getLogger, FileHandler, StreamHandler, INFO, basicConfig, error as log_error, info as log_info, warning as log_warning
 from uvloop import install
+
+# faulthandler_enable()
 install()
-
-faulthandler_enable()
-
 setdefaulttimeout(600)
 
 botStartTime = time()
@@ -37,7 +36,7 @@ QbTorrents = {}
 DRIVES_NAMES = []
 DRIVES_IDS = []
 INDEX_URLS = []
-GLOBAL_EXTENSION_FILTER = ['.aria2']
+GLOBAL_EXTENSION_FILTER = ['aria2']
 user_data = {}
 aria2_options = {}
 qbit_options = {}
@@ -179,16 +178,11 @@ if len(USER_SESSION_STRING) != 0:
                     parse_mode=enums.ParseMode.HTML, no_updates=True, max_concurrent_transmissions=1000).start()
     IS_PREMIUM_USER = user.me.is_premium
 
-MEGA_API_KEY = environ.get('MEGA_API_KEY', '')
-if len(MEGA_API_KEY) == 0:
-    log_warning('MEGA API KEY not provided!')
-    MEGA_API_KEY = ''
-
-MEGA_EMAIL_ID = environ.get('MEGA_EMAIL_ID', '')
+MEGA_EMAIL = environ.get('MEGA_EMAIL', '')
 MEGA_PASSWORD = environ.get('MEGA_PASSWORD', '')
-if len(MEGA_EMAIL_ID) == 0 or len(MEGA_PASSWORD) == 0:
+if len(MEGA_EMAIL) == 0 or len(MEGA_PASSWORD) == 0:
     log_warning('MEGA Credentials not provided!')
-    MEGA_EMAIL_ID = ''
+    MEGA_EMAIL = ''
     MEGA_PASSWORD = ''
 
 UPTOBOX_TOKEN = environ.get('UPTOBOX_TOKEN', '')
@@ -231,15 +225,15 @@ if len(AUTO_DELETE_MESSAGE_DURATION) == 0:
 else:
     AUTO_DELETE_MESSAGE_DURATION = int(AUTO_DELETE_MESSAGE_DURATION)
 
-YT_DLP_QUALITY = environ.get('YT_DLP_QUALITY', '')
-if len(YT_DLP_QUALITY) == 0:
-    YT_DLP_QUALITY = ''
+YT_DLP_OPTIONS = environ.get('YT_DLP_OPTIONS', '')
+if len(YT_DLP_OPTIONS) == 0:
+    YT_DLP_OPTIONS = ''
 
 SEARCH_LIMIT = environ.get('SEARCH_LIMIT', '')
 SEARCH_LIMIT = 0 if len(SEARCH_LIMIT) == 0 else int(SEARCH_LIMIT)
 
-DUMP_CHAT = environ.get('DUMP_CHAT', '')
-DUMP_CHAT = '' if len(DUMP_CHAT) == 0 else int(DUMP_CHAT)
+DUMP_CHAT_ID = environ.get('DUMP_CHAT_ID', '')
+DUMP_CHAT_ID = '' if len(DUMP_CHAT_ID) == 0 else int(DUMP_CHAT_ID)
 
 STATUS_LIMIT = environ.get('STATUS_LIMIT', '')
 STATUS_LIMIT = 10 if len(STATUS_LIMIT) == 0 else int(STATUS_LIMIT)
@@ -269,9 +263,6 @@ INCOMPLETE_TASK_NOTIFIER = INCOMPLETE_TASK_NOTIFIER.lower() == 'true'
 
 STOP_DUPLICATE = environ.get('STOP_DUPLICATE', '')
 STOP_DUPLICATE = STOP_DUPLICATE.lower() == 'true'
-
-VIEW_LINK = environ.get('VIEW_LINK', '')
-VIEW_LINK = VIEW_LINK.lower() == 'true'
 
 IS_TEAM_DRIVE = environ.get('IS_TEAM_DRIVE', '')
 IS_TEAM_DRIVE = IS_TEAM_DRIVE.lower() == 'true'
@@ -333,7 +324,7 @@ config_dict = {'AS_DOCUMENT': AS_DOCUMENT,
                'DATABASE_URL': DATABASE_URL,
                'DEFAULT_UPLOAD': DEFAULT_UPLOAD,
                'DOWNLOAD_DIR': DOWNLOAD_DIR,
-               'DUMP_CHAT': DUMP_CHAT,
+               'DUMP_CHAT_ID': DUMP_CHAT_ID,
                'EQUAL_SPLITS': EQUAL_SPLITS,
                'EXTENSION_FILTER': EXTENSION_FILTER,
                'GDRIVE_ID': GDRIVE_ID,
@@ -343,8 +334,7 @@ config_dict = {'AS_DOCUMENT': AS_DOCUMENT,
                'LEECH_FILENAME_PREFIX': LEECH_FILENAME_PREFIX,
                'LEECH_SPLIT_SIZE': LEECH_SPLIT_SIZE,
                'MEDIA_GROUP': MEDIA_GROUP,
-               'MEGA_API_KEY': MEGA_API_KEY,
-               'MEGA_EMAIL_ID': MEGA_EMAIL_ID,
+               'MEGA_EMAIL': MEGA_EMAIL,
                'MEGA_PASSWORD': MEGA_PASSWORD,
                'OWNER_ID': OWNER_ID,
                'QUEUE_ALL': QUEUE_ALL,
@@ -373,9 +363,8 @@ config_dict = {'AS_DOCUMENT': AS_DOCUMENT,
                'UPTOBOX_TOKEN': UPTOBOX_TOKEN,
                'USER_SESSION_STRING': USER_SESSION_STRING,
                'USE_SERVICE_ACCOUNTS': USE_SERVICE_ACCOUNTS,
-               'VIEW_LINK': VIEW_LINK,
                'WEB_PINCODE': WEB_PINCODE,
-               'YT_DLP_QUALITY': YT_DLP_QUALITY}
+               'YT_DLP_OPTIONS': YT_DLP_OPTIONS}
 
 if GDRIVE_ID:
     DRIVES_NAMES.append("Main")
@@ -431,7 +420,7 @@ def aria2c_init():
         aria2.add_uris([link], {'dir': dire})
         sleep(3)
         downloads = aria2.get_downloads()
-        sleep(15)
+        sleep(10)
         aria2.remove(downloads, force=True, files=True, clean=True)
     except Exception as e:
         log_error(f"Aria2c initializing error: {e}")
@@ -446,7 +435,6 @@ aria2c_global = ['bt-max-open-files', 'download-result', 'keep-unfinished-downlo
 
 if not aria2_options:
     aria2_options = aria2.client.get_global_option()
-    del aria2_options['dir']
 else:
     a2c_glo = {op: aria2_options[op]
                for op in aria2c_global if op in aria2_options}
@@ -467,7 +455,7 @@ else:
     qb_client.app_set_preferences(qb_opt)
 
 log_info("Creating client from BOT_TOKEN")
-bot = tgClient('bot', TELEGRAM_API, TELEGRAM_HASH, bot_token=BOT_TOKEN,
+bot = tgClient('bot', TELEGRAM_API, TELEGRAM_HASH, bot_token=BOT_TOKEN, workers=1000,
                parse_mode=enums.ParseMode.HTML, max_concurrent_transmissions=1000).start()
 bot_loop = bot.loop
 bot_name = bot.me.username

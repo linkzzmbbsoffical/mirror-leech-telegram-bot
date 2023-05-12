@@ -13,6 +13,9 @@ from concurrent.futures import ThreadPoolExecutor
 from bot import download_dict, download_dict_lock, botStartTime, user_data, config_dict, bot_loop
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.button_build import ButtonMaker
+from bot.helper.ext_utils.telegraph_helper import telegraph
+
+THREADPOOL = ThreadPoolExecutor(max_workers=1000)
 
 MAGNET_REGEX = r'magnet:\?xt=urn:(btih|btmh):[a-zA-Z0-9]*\s*'
 
@@ -91,6 +94,15 @@ def bt_selection_buttons(id_):
     return buttons.build_menu(2)
 
 
+async def get_telegraph_list(telegraph_content):
+    path = [(await telegraph.create_page(title='Mirror-Leech-Bot Drive Search', content=content))["path"] for content in telegraph_content]
+    if len(path) > 1:
+        await telegraph.edit_telegraph(path, telegraph_content)
+    buttons = ButtonMaker()
+    buttons.ubutton("🔎 VIEW", f"https://telegra.ph/{path[0]}")
+    return buttons.build_menu(1)
+
+
 def get_progress_bar_string(pct):
     pct = float(pct.strip('%'))
     p = min(max(pct, 0), 100)
@@ -106,9 +118,9 @@ def get_readable_message():
     STATUS_LIMIT = config_dict['STATUS_LIMIT']
     tasks = len(download_dict)
     globals()['PAGES'] = (tasks + STATUS_LIMIT - 1) // STATUS_LIMIT
-    if PAGE_NO > PAGES:
-        globals()['STATUS_START'] -= STATUS_LIMIT
-        globals()['PAGE_NO'] -= 1
+    if PAGE_NO > PAGES and PAGES != 0:
+        globals()['STATUS_START'] = STATUS_LIMIT * (PAGES - 1)
+        globals()['PAGE_NO'] = PAGES
     for download in list(download_dict.values())[STATUS_START:STATUS_LIMIT+STATUS_START]:
         if download.message.chat.type.name in ['SUPERGROUP', 'CHANNEL']:
             msg += f"<b><a href='{download.message.link}'>{download.status()}</a>: </b>"
@@ -211,6 +223,8 @@ def is_url(url):
 def is_gdrive_link(url):
     return "drive.google.com" in url
 
+def is_telegram_link(url):
+    return url.startswith(('https://t.me/', 'tg://openmessage?user_id='))
 
 def is_share_link(url):
     return bool(re_match(r'https?:\/\/.+\.gdtot\.\S+|https?:\/\/(filepress|filebee|appdrive|gdflix)\.\S+', url))
@@ -267,9 +281,8 @@ def new_task(func):
 
 async def sync_to_async(func, *args, wait=True, **kwargs):
     pfunc = partial(func, *args, **kwargs)
-    with ThreadPoolExecutor() as pool:
-        future = bot_loop.run_in_executor(pool, pfunc)
-        return await future if wait else future
+    future = bot_loop.run_in_executor(THREADPOOL, pfunc)
+    return await future if wait else future
 
 
 def async_to_sync(func, *args, wait=True, **kwargs):

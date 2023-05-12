@@ -22,7 +22,7 @@ Number should be always before n:, pswd: and opt:
 <code>/cmd</code> 10(number of links) m:folder_name
 Number and m:folder_name should be always before n:, pswd: and opt:
 
-<b>Options Note:</b> Add `^` before integer or inf or float, some values must be numeric and some string.
+<b>Options Note:</b> Add `^` before integer or float, some values must be numeric and some string.
 Like playlist_items:10 works with string, so no need to add `^` before the number but playlistend works only with integer so you must add `^` before the number like example above.
 You can add tuple and dict also. Use double quotes inside dict.
 
@@ -44,8 +44,9 @@ Check here all <a href='https://rclone.org/flags/'>RcloneFlags</a>.
 2. Options (<b>s, m: and multi</b>) should be added randomly before link and before any other option.
 3. Options (<b>n:, pswd: and opt:</b>) should be added randomly after the link if link along with the cmd or after cmd if by reply.
 4. You can always add video quality from yt-dlp api options.
+5. Don't add file extension while rename using `n:`
 
-Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184'>FILE</a>.
+Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184'>FILE</a> or use this <a href='https://t.me/mltb_official/177'>script</a> to convert cli arguments to api options.
 """
 
 MIRROR_HELP_MESSAGE = """
@@ -82,6 +83,14 @@ Treat rclone paths exactly like links
 Users can add their own rclone from user settings
 If you want to add path manually from your config add <code>mrcc:</code> before the path without space
 <code>/cmd</code> <code>mrcc:</code>main:/dump/ubuntu.iso
+
+<b>TG Links</b>:
+Treat links like any direct link
+Some links need user access so sure you must add USER_SESSION_STRING for it.
+Three types of links:
+Public: <code>https://t.me/channel_name/message_id</code>
+Private: <code>tg://openmessage?user_id=xxxxxx&message_id=xxxxx</code>
+Super: <code>https://t.me/c/channel_id/message_id</code>
 
 <b>Upload</b>:
 <code>/cmd</code> link up: <code>rcl</code> (To select rclone config, remote and path)
@@ -127,4 +136,15 @@ Filter Notes:
 3. You can add `or` and `|` as much as you want."
 4. Take look on title if it has static special character after or before the qualities or extensions or whatever and use them in filter to avoid wrong match.
 Timeout: 60 sec.
+"""
+
+CLONE_HELP_MESSAGE = """Send Gdrive|Gdot|Filepress|Filebee|Appdrive|Gdflix link or rclone path along with command or by replying to the link/rc_path by command
+<b>Multi links only by replying to first gdlink or rclone_path:</b>
+<code>/cmd</code> 10(number of links/pathies)
+<b>Gdrive:</b>
+<code>/cmd</code> gdrivelink
+<b>Rclone:</b>
+<code>/cmd</code> rcl or rclone_path up: rcl or rclone_path rcf: flagkey:flagvalue|flagkey|flagkey:flagvalue
+Notes:
+if up: not specified then rclone destination will be the RCLONE_PATH from config.env
 """

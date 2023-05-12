@@ -96,20 +96,16 @@ async def load_config():
     if len(EXTENSION_FILTER) > 0:
         fx = EXTENSION_FILTER.split()
         GLOBAL_EXTENSION_FILTER.clear()
-        GLOBAL_EXTENSION_FILTER.append('.aria2')
+        GLOBAL_EXTENSION_FILTER.append('aria2')
         for x in fx:
             if x.strip().startswith('.'):
                 x = x.lstrip('.')
             GLOBAL_EXTENSION_FILTER.append(x.strip().lower())
 
-    MEGA_API_KEY = environ.get('MEGA_API_KEY', '')
-    if len(MEGA_API_KEY) == 0:
-        MEGA_API_KEY = ''
-
-    MEGA_EMAIL_ID = environ.get('MEGA_EMAIL_ID', '')
+    MEGA_EMAIL = environ.get('MEGA_EMAIL', '')
     MEGA_PASSWORD = environ.get('MEGA_PASSWORD', '')
-    if len(MEGA_EMAIL_ID) == 0 or len(MEGA_PASSWORD) == 0:
-        MEGA_EMAIL_ID = ''
+    if len(MEGA_EMAIL) == 0 or len(MEGA_PASSWORD) == 0:
+        MEGA_EMAIL = ''
         MEGA_PASSWORD = ''
 
     UPTOBOX_TOKEN = environ.get('UPTOBOX_TOKEN', '')
@@ -160,15 +156,15 @@ async def load_config():
     else:
         AUTO_DELETE_MESSAGE_DURATION = int(AUTO_DELETE_MESSAGE_DURATION)
 
-    YT_DLP_QUALITY = environ.get('YT_DLP_QUALITY', '')
-    if len(YT_DLP_QUALITY) == 0:
-        YT_DLP_QUALITY = ''
+    YT_DLP_OPTIONS = environ.get('YT_DLP_OPTIONS', '')
+    if len(YT_DLP_OPTIONS) == 0:
+        YT_DLP_OPTIONS = ''
 
     SEARCH_LIMIT = environ.get('SEARCH_LIMIT', '')
     SEARCH_LIMIT = 0 if len(SEARCH_LIMIT) == 0 else int(SEARCH_LIMIT)
 
-    DUMP_CHAT = environ.get('DUMP_CHAT', '')
-    DUMP_CHAT = '' if len(DUMP_CHAT) == 0 else int(DUMP_CHAT)
+    DUMP_CHAT_ID = environ.get('DUMP_CHAT_ID', '')
+    DUMP_CHAT_ID = '' if len(DUMP_CHAT_ID) == 0 else int(DUMP_CHAT_ID)
 
     STATUS_LIMIT = environ.get('STATUS_LIMIT', '')
     STATUS_LIMIT = 10 if len(STATUS_LIMIT) == 0 else int(STATUS_LIMIT)
@@ -224,9 +220,6 @@ async def load_config():
 
     STOP_DUPLICATE = environ.get('STOP_DUPLICATE', '')
     STOP_DUPLICATE = STOP_DUPLICATE.lower() == 'true'
-
-    VIEW_LINK = environ.get('VIEW_LINK', '')
-    VIEW_LINK = VIEW_LINK.lower() == 'true'
 
     IS_TEAM_DRIVE = environ.get('IS_TEAM_DRIVE', '')
     IS_TEAM_DRIVE = IS_TEAM_DRIVE.lower() == 'true'
@@ -311,7 +304,7 @@ async def load_config():
                         'DATABASE_URL': DATABASE_URL,
                         'DEFAULT_UPLOAD': DEFAULT_UPLOAD,
                         'DOWNLOAD_DIR': DOWNLOAD_DIR,
-                        'DUMP_CHAT': DUMP_CHAT,
+                        'DUMP_CHAT_ID': DUMP_CHAT_ID,
                         'EQUAL_SPLITS': EQUAL_SPLITS,
                         'EXTENSION_FILTER': EXTENSION_FILTER,
                         'GDRIVE_ID': GDRIVE_ID,
@@ -321,8 +314,7 @@ async def load_config():
                         'LEECH_FILENAME_PREFIX': LEECH_FILENAME_PREFIX,
                         'LEECH_SPLIT_SIZE': LEECH_SPLIT_SIZE,
                         'MEDIA_GROUP': MEDIA_GROUP,
-                        'MEGA_API_KEY': MEGA_API_KEY,
-                        'MEGA_EMAIL_ID': MEGA_EMAIL_ID,
+                        'MEGA_EMAIL': MEGA_EMAIL,
                         'MEGA_PASSWORD': MEGA_PASSWORD,
                         'OWNER_ID': OWNER_ID,
                         'QUEUE_ALL': QUEUE_ALL,
@@ -351,9 +343,8 @@ async def load_config():
                         'UPTOBOX_TOKEN': UPTOBOX_TOKEN,
                         'USER_SESSION_STRING': USER_SESSION_STRING,
                         'USE_SERVICE_ACCOUNTS': USE_SERVICE_ACCOUNTS,
-                        'VIEW_LINK': VIEW_LINK,
                         'WEB_PINCODE': WEB_PINCODE,
-                        'YT_DLP_QUALITY': YT_DLP_QUALITY})
+                        'YT_DLP_OPTIONS': YT_DLP_OPTIONS})
 
     if DATABASE_URL:
         await DbManger().update_config(config_dict)
@@ -452,7 +443,7 @@ async def update_buttons(message, key=None, edit_type=None):
     await editMessage(message, msg, button)
 
 
-async def edit_variable(client, message, pre_message, key):
+async def edit_variable(_, message, pre_message, key):
     handler_dict[message.chat.id] = False
     value = message.text
     if value.lower() == 'true':
@@ -467,7 +458,7 @@ async def edit_variable(client, message, pre_message, key):
     elif key == 'DOWNLOAD_DIR':
         if not value.endswith('/'):
             value += '/'
-    elif key in ['DUMP_CHAT', 'RSS_CHAT_ID']:
+    elif key in ['DUMP_CHAT_ID', 'RSS_CHAT_ID']:
         value = int(value)
     elif key == 'STATUS_UPDATE_INTERVAL':
         value = int(value)
@@ -527,7 +518,7 @@ async def edit_variable(client, message, pre_message, key):
         await rclone_serve_booter()
 
 
-async def edit_aria(client, message, pre_message, key):
+async def edit_aria(_, message, pre_message, key):
     handler_dict[message.chat.id] = False
     value = message.text
     if key == 'newkey':
@@ -553,7 +544,7 @@ async def edit_aria(client, message, pre_message, key):
         await DbManger().update_aria2(key, value)
 
 
-async def edit_qbit(client, message, pre_message, key):
+async def edit_qbit(_, message, pre_message, key):
     handler_dict[message.chat.id] = False
     value = message.text
     if value.lower() == 'true':
@@ -572,7 +563,7 @@ async def edit_qbit(client, message, pre_message, key):
         await DbManger().update_qbittorrent(key, value)
 
 
-async def update_private_file(client, message, pre_message):
+async def update_private_file(_, message, pre_message):
     handler_dict[message.chat.id] = False
     if not message.media and (file_name := message.text):
         fn = file_name.rsplit('.zip', 1)[0]
@@ -581,6 +572,7 @@ async def update_private_file(client, message, pre_message):
         if fn == 'accounts':
             if await aiopath.exists('accounts'):
                 await aiormtree('accounts')
+            if await aiopath.exists('rclone_sa'):
                 await aiormtree('rclone_sa')
             config_dict['USE_SERVICE_ACCOUNTS'] = False
             if DATABASE_URL:
@@ -596,6 +588,7 @@ async def update_private_file(client, message, pre_message):
         if file_name == 'accounts.zip':
             if await aiopath.exists('accounts'):
                 await aiormtree('accounts')
+            if await aiopath.exists('rclone_sa'):
                 await aiormtree('rclone_sa')
             await (await create_subprocess_exec("7z", "x", "-o.", "-aoa", "accounts.zip", "accounts/*.json")).wait()
             await (await create_subprocess_exec("chmod", "-R", "777", "accounts")).wait()
@@ -809,7 +802,7 @@ async def edit_bot_settings(client, query):
         await event_handler(client, query, pfunc, rfunc)
     elif data[1] == 'editaria' and STATE == 'view':
         value = aria2_options[data[2]]
-        if len(value) > 200:
+        if len(str(value)) > 200:
             await query.answer()
             with BytesIO(str.encode(value)) as out_file:
                 out_file.name = f"{data[2]}.txt"
@@ -864,7 +857,7 @@ async def edit_bot_settings(client, query):
         await message.delete()
 
 
-async def bot_settings(client, message):
+async def bot_settings(_, message):
     msg, button = await get_buttons()
     globals()['START'] = 0
     await sendMessage(message, msg, button)

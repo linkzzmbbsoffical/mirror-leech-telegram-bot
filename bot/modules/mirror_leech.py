@@ -7,7 +7,7 @@ from asyncio import sleep
 from aiofiles.os import path as aiopath
 
 from bot import bot, DOWNLOAD_DIR, LOGGER, config_dict
-from bot.helper.ext_utils.bot_utils import is_url, is_magnet, is_mega_link, is_gdrive_link, get_content_type, new_task, sync_to_async, is_rclone_path
+from bot.helper.ext_utils.bot_utils import is_url, is_magnet, is_mega_link, is_gdrive_link, get_content_type, new_task, sync_to_async, is_rclone_path, is_telegram_link
 from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
 from bot.helper.mirror_utils.download_utils.aria2_download import add_aria2c_download
 from bot.helper.mirror_utils.download_utils.gd_download import add_gd_download
@@ -19,7 +19,7 @@ from bot.helper.mirror_utils.download_utils.direct_link_generator import direct_
 from bot.helper.mirror_utils.download_utils.telegram_download import TelegramDownloadHelper
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
-from bot.helper.telegram_helper.message_utils import sendMessage
+from bot.helper.telegram_helper.message_utils import sendMessage, get_tg_link_content
 from bot.helper.listeners.tasks_listener import MirrorLeechListener
 from bot.helper.ext_utils.help_messages import MIRROR_HELP_MESSAGE
 
@@ -35,6 +35,9 @@ async def _mirror_leech(client, message, isZip=False, extract=False, isQbit=Fals
     multi = 0
     link = ''
     folder_name = ''
+    reply_to = None
+    file_ = None
+    session = ''
 
     if len(message_args) > 1:
         index = 1
@@ -96,6 +99,8 @@ async def _mirror_leech(client, message, isZip=False, extract=False, isQbit=Fals
         _mirror_leech(client, nextmsg, isZip, extract,
                       isQbit, isLeech, sameDir)
 
+    __run_multi()
+
     path = f'{DOWNLOAD_DIR}{message.id}{folder_name}'
 
     name = mesg[0].split(' n: ', 1)
@@ -125,15 +130,32 @@ async def _mirror_leech(client, message, isZip=False, extract=False, isQbit=Fals
     else:
         tag = message.from_user.mention
 
-    file_ = None
-    if reply_to := message.reply_to_message:
+    if link and is_telegram_link(link):
+        try:
+            reply_to, session = await get_tg_link_content(link)
+        except Exception as e:
+            await sendMessage(message, f'ERROR: {e}')
+            return
+    elif message.reply_to_message:
+        reply_to = message.reply_to_message
+        if reply_to.text is not None:
+            reply_text = reply_to.text.split('\n', 1)[0].strip()
+            if reply_text and is_telegram_link(reply_text):
+                try:
+                    reply_to, session = await get_tg_link_content(reply_text)
+                except Exception as e:
+                    await sendMessage(message, f'ERROR: {e}')
+                    return
+
+    if reply_to:
         file_ = reply_to.document or reply_to.photo or reply_to.video or reply_to.audio or \
             reply_to.voice or reply_to.video_note or reply_to.sticker or reply_to.animation or None
-        if not reply_to.from_user.is_bot:
+        if (re_user := reply_to.from_user) and not re_user.is_bot:
             if username := reply_to.from_user.username:
                 tag = f"@{username}"
             else:
                 tag = reply_to.from_user.mention
+
         if len(link) == 0 or not is_url(link) and not is_magnet(link):
             if file_ is None:
                 reply_text = reply_to.text.split('\n', 1)[0].strip()
@@ -161,16 +183,35 @@ async def _mirror_leech(client, message, isZip=False, extract=False, isQbit=Fals
                 LOGGER.info(str(e))
                 if str(e).startswith('ERROR:'):
                     await sendMessage(message, str(e))
-                    __run_multi()
                     return
-    __run_multi()
+
+    if not isLeech:
+        if config_dict['DEFAULT_UPLOAD'] == 'rc' and up is None or up == 'rc':
+            up = config_dict['RCLONE_PATH']
+        if up is None and config_dict['DEFAULT_UPLOAD'] == 'gd':
+            up = 'gd'
+        if up == 'gd' and not config_dict['GDRIVE_ID']:
+            await sendMessage(message, 'GDRIVE_ID not Provided!')
+            return
+        elif not up:
+            await sendMessage(message, 'No Rclone Destination!')
+            return
+        elif up not in ['rcl', 'gd']:
+            if up.startswith('mrcc:'):
+                config_path = f'rclone/{message.from_user.id}.conf'
+            else:
+                config_path = 'rclone.conf'
+            if not await aiopath.exists(config_path):
+                await sendMessage(message, f"Rclone Config: {config_path} not Exists!")
+                return
 
     if link == 'rcl':
         link = await RcloneList(client, message).get_rclone_path('rcd')
         if not is_rclone_path(link):
             await sendMessage(message, link)
             return
-    if (up == 'rcl' or config_dict['RCLONE_PATH'] == 'rcl' and config_dict['DEFAULT_UPLOAD'] == 'rc') and not isLeech:
+
+    if up == 'rcl' and not isLeech:
         up = await RcloneList(client, message).get_rclone_path('rcu')
         if not is_rclone_path(up):
             await sendMessage(message, up)
@@ -180,7 +221,7 @@ async def _mirror_leech(client, message, isZip=False, extract=False, isQbit=Fals
         message, isZip, extract, isQbit, isLeech, pswd, tag, select, seed, sameDir, rcf, up)
 
     if file_ is not None:
-        await TelegramDownloadHelper(listener).add_download(reply_to, f'{path}/', name)
+        await TelegramDownloadHelper(listener).add_download(reply_to, f'{path}/', name, session)
     elif is_rclone_path(link):
         if link.startswith('mrcc:'):
             link = link.split('mrcc:', 1)[1]

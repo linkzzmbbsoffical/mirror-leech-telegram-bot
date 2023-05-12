@@ -15,7 +15,6 @@ from bot.helper.telegram_helper.message_utils import sendMessage, editMessage
 from bot.helper.ext_utils.bot_utils import cmd_exec, new_thread, get_readable_file_size, new_task, get_readable_time
 
 LIST_LIMIT = 6
-TIMEOUT = 240
 
 
 @new_task
@@ -45,6 +44,8 @@ async def path_updates(client, query, obj):
         else:
             await obj.back_from_path()
     elif data[1] == 're':
+        # some remotes has space
+        data = query.data.split(maxsplit=2)
         obj.remote = data[2]
         await obj.get_path()
     elif data[1] == 'pa':
@@ -92,6 +93,7 @@ class RcloneList:
         self.__sections = []
         self.__reply_to = None
         self.__time = time()
+        self.__timeout = 240
         self.remote = ''
         self.is_cancelled = False
         self.query_proc = False
@@ -111,7 +113,7 @@ class RcloneList:
         handler = self.__client.add_handler(CallbackQueryHandler(
             pfunc, filters=regex('^rcq') & user(self.__user_id)), group=-1)
         try:
-            await wait_for(self.event.wait(), timeout=240)
+            await wait_for(self.event.wait(), timeout=self.__timeout)
         except:
             self.path = ''
             self.remote = 'Timed Out. Task has been cancelled!'
@@ -173,7 +175,7 @@ class RcloneList:
             msg += f' | Page: {int(page)}/{pages} | Page Step: {self.page_step}'
         msg += f'\n\nItem Type: {self.item_type}\nConfig Path: {self.config_path}'
         msg += f'\nCurrent Path: <code>{self.remote}{self.path}</code>'
-        msg += f'\nTimeout: {get_readable_time(TIMEOUT-(time()-self.__time))}'
+        msg += f'\nTimeout: {get_readable_time(self.__timeout-(time()-self.__time))}'
         await self.__send_list_message(msg, button)
 
     async def get_path(self, itype=''):
@@ -218,7 +220,7 @@ class RcloneList:
                 ('\nTransfer Type: <i>Download</i>' if self.list_status ==
                  'rcd' else '\nTransfer Type: <i>Upload</i>')
             msg += f'\nConfig Path: {self.config_path}'
-            msg += f'\nTimeout: {get_readable_time(TIMEOUT-(time()-self.__time))}'
+            msg += f'\nTimeout: {get_readable_time(self.__timeout-(time()-self.__time))}'
             buttons = ButtonMaker()
             for remote in self.__sections:
                 buttons.ibutton(remote, f'rcq re {remote}:')
@@ -233,7 +235,7 @@ class RcloneList:
             msg = 'Choose Rclone config:' + \
                 ('\nTransfer Type: Download' if self.list_status ==
                  'rcd' else '\nTransfer Type: Upload')
-            msg += f'\nTimeout: {get_readable_time(TIMEOUT-(time()-self.__time))}'
+            msg += f'\nTimeout: {get_readable_time(self.__timeout-(time()-self.__time))}'
             buttons = ButtonMaker()
             buttons.ibutton('Owner Config', 'rcq owner')
             buttons.ibutton('My Config', 'rcq user')
@@ -254,15 +256,19 @@ class RcloneList:
         else:
             await self.list_config()
 
-    async def get_rclone_path(self, status):
+    async def get_rclone_path(self, status, config_path=None):
         self.list_status = status
         future = self.__event_handler()
-        self.__rc_user = await aiopath.exists(self.user_rcc_path)
-        self.__rc_owner = await aiopath.exists('rclone.conf')
-        if not self.__rc_owner and not self.__rc_user:
-            self.event.set()
-            return 'Rclone Config not Exists!'
-        await self.list_config()
+        if config_path is None:
+            self.__rc_user = await aiopath.exists(self.user_rcc_path)
+            self.__rc_owner = await aiopath.exists('rclone.conf')
+            if not self.__rc_owner and not self.__rc_user:
+                self.event.set()
+                return 'Rclone Config not Exists!'
+            await self.list_config()
+        else:
+            self.config_path = config_path
+            await self.list_remotes()
         await wrap_future(future)
         await self.__reply_to.delete()
         if self.config_path != 'rclone.conf' and not self.is_cancelled:
