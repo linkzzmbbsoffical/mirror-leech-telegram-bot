@@ -4,10 +4,10 @@ from time import time
 from aiofiles.os import remove as aioremove, path as aiopath
 
 from bot import aria2, download_dict_lock, download_dict, LOGGER, config_dict
-from bot.helper.mirror_utils.upload_utils.gdriveTools import GoogleDriveHelper
+from bot.helper.mirror_utils.gdrive_utlis.search import gdSearch
 from bot.helper.mirror_utils.status_utils.aria2_status import Aria2Status
 from bot.helper.ext_utils.fs_utils import get_base_name, clean_unwanted
-from bot.helper.ext_utils.bot_utils import getDownloadByGid, new_thread, bt_selection_buttons, sync_to_async, get_telegraph_list
+from bot.helper.ext_utils.bot_utils import getDownloadByGid, new_thread, bt_selection_buttons, sync_to_async, get_telegraph_list, is_gdrive_id
 from bot.helper.telegram_helper.message_utils import sendMessage, deleteMessage, update_all_messages
 
 
@@ -31,7 +31,7 @@ async def __onDownloadStarted(api, gid):
         return
     else:
         LOGGER.info(f'onDownloadStarted: {download.name} - Gid: {gid}')
-    if config_dict['STOP_DUPLICATE']:
+    if listener.upDest.startswith('mtp:') and listener.user_dict('stop_duplicate', False) or not listener.upDest.startswith('mtp:') and config_dict['STOP_DUPLICATE']:
         await sleep(1)
         if dl := await getDownloadByGid(gid):
             if not hasattr(dl, 'listener'):
@@ -39,7 +39,7 @@ async def __onDownloadStarted(api, gid):
                     f"onDownloadStart: {gid}. STOP_DUPLICATE didn't pass since download completed earlier!")
                 return
             listener = dl.listener()
-            if listener.isLeech or listener.select or listener.upPath != 'gd':
+            if listener.isLeech or listener.select or not is_gdrive_id(listener.upDest):
                 return
             download = await sync_to_async(api.get_download, gid)
             if not download.is_torrent:
@@ -47,7 +47,7 @@ async def __onDownloadStarted(api, gid):
                 download = download.live
             LOGGER.info('Checking File/Folder if already in Drive...')
             name = download.name
-            if listener.isZip:
+            if listener.compress:
                 name = f"{name}.zip"
             elif listener.extract:
                 try:
@@ -55,7 +55,7 @@ async def __onDownloadStarted(api, gid):
                 except:
                     name = None
             if name is not None:
-                telegraph_content, contents_no = await sync_to_async(GoogleDriveHelper().drive_list, name, True)
+                telegraph_content, contents_no = await sync_to_async(gdSearch(stopDup=True, listener=listener).drive_list, name)
                 if telegraph_content:
                     msg = f"File/Folder is already available in Drive.\nHere are {contents_no} list results:"
                     button = await get_telegraph_list(telegraph_content)
@@ -171,7 +171,7 @@ async def __onDownloadError(api, gid):
 
 
 def start_aria2_listener():
-    aria2.listen_to_notifications(threaded=True,
+    aria2.listen_to_notifications(threaded=False,
                                   on_download_start=__onDownloadStarted,
                                   on_download_error=__onDownloadError,
                                   on_download_stop=__onDownloadStopped,

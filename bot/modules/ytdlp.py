@@ -2,7 +2,6 @@
 from pyrogram.handlers import MessageHandler, CallbackQueryHandler
 from pyrogram.filters import command, regex, user
 from asyncio import sleep, wait_for, Event, wrap_future
-from re import split as re_split
 from aiohttp import ClientSession
 from aiofiles.os import path as aiopath
 from yt_dlp import YoutubeDL
@@ -12,13 +11,14 @@ from time import time
 from bot import DOWNLOAD_DIR, bot, config_dict, user_data, LOGGER
 from bot.helper.telegram_helper.message_utils import sendMessage, editMessage
 from bot.helper.telegram_helper.button_build import ButtonMaker
-from bot.helper.ext_utils.bot_utils import get_readable_file_size, is_url, new_task, sync_to_async, new_task, is_rclone_path, new_thread, get_readable_time
+from bot.helper.ext_utils.bot_utils import get_readable_file_size, is_url, new_task, sync_to_async, new_task, is_rclone_path, new_thread, get_readable_time, arg_parser, is_gdrive_id
 from bot.helper.mirror_utils.download_utils.yt_dlp_download import YoutubeDLHelper
 from bot.helper.mirror_utils.rclone_utils.list import RcloneList
 from bot.helper.telegram_helper.bot_commands import BotCommands
 from bot.helper.telegram_helper.filters import CustomFilters
 from bot.helper.listeners.tasks_listener import MirrorLeechListener
 from bot.helper.ext_utils.help_messages import YT_HELP_MESSAGE
+from bot.helper.ext_utils.bulk_links import extract_bulk_links
 
 
 @new_task
@@ -238,121 +238,143 @@ async def _mdisk(link, name):
 
 
 @new_task
-async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
-    mssg = message.text
-    user_id = message.from_user.id
+async def _ytdl(client, message, isLeech=False, sameDir=None, bulk=[]):
+    text = message.text.split('\n')
+    input_list = text[0].split(' ')
     qual = ''
-    select = False
-    multi = 0
-    link = ''
-    folder_name = ''
 
-    args = mssg.split(maxsplit=3)
-    args.pop(0)
-    if len(args) > 0:
-        index = 1
-        for x in args:
-            x = x.strip()
-            if x == 's':
-                select = True
-                index += 1
-            elif x.strip().isdigit():
-                multi = int(x)
-                mi = index
-            elif x.startswith('m:'):
-                marg = x.split('m:', 1)
-                if len(marg) > 1:
-                    folder_name = f'/{marg[1]}'
-                    if not sameDir:
-                        sameDir = set()
-                    sameDir.add(message.id)
-            else:
-                break
-        if multi == 0:
-            args = mssg.split(maxsplit=index)
-            if len(args) > index:
-                x = args[index].strip()
-                if not x.startswith(('n:', 'pswd:', 'up:', 'rcf:', 'opt:')):
-                    link = re_split(r' opt: | pswd: | n: | rcf: | up: ', x)[
-                        0].strip()
+    arg_base = {'link': '', '-i': 0, '-m': '', '-s': False, '-opt': '',
+                '-b': False, '-n': '', '-z': False, '-up': '', '-rcf': ''}
+
+    args = arg_parser(input_list[1:], arg_base)
+
+    try:
+        multi = int(args['-i'])
+    except:
+        multi = 0
+
+    select = args['-s']
+    isBulk = args['-b']
+    opt = args['-opt']
+    folder_name = args['-m']
+    name = args['-n']
+    up = args['-up']
+    rcf = args['-rcf']
+    link = args['link']
+    compress = args['-z']
+
+    bulk_start = 0
+    bulk_end = 0
+
+    if not isinstance(isBulk, bool):
+        dargs = isBulk.split(':')
+        bulk_start = dargs[0] or None
+        if len(dargs) == 2:
+            bulk_end = dargs[1] or None
+        isBulk = True
+
+    if folder_name and not isBulk:
+        folder_name = f'/{folder_name}'
+        if sameDir is None:
+            sameDir = {'total': multi, 'tasks': set(), 'name': folder_name}
+        sameDir['tasks'].add(message.id)
+
+    if isBulk:
+        try:
+            bulk = await extract_bulk_links(message, bulk_start, bulk_end)
+            if len(bulk) == 0:
+                raise ValueError('Bulk Empty!')
+        except:
+            await sendMessage(message, 'Reply to text file or tg message that have links seperated by new line!')
+            return
+        b_msg = input_list[:1]
+        b_msg.append(f'{bulk[0]} -i {len(bulk)}')
+        nextmsg = await sendMessage(message, " ".join(b_msg))
+        nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=nextmsg.id)
+        nextmsg.from_user = message.from_user
+        _ytdl(client, nextmsg, isLeech, sameDir, bulk)
+        return
+
+    if len(bulk) != 0:
+        del bulk[0]
 
     @new_task
     async def __run_multi():
         if multi <= 1:
             return
-        await sleep(4)
-        nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=message.reply_to_message_id + 1)
-        ymsg = mssg.split(maxsplit=mi+1)
-        ymsg[mi] = f'{multi - 1}'
-        nextmsg = await sendMessage(nextmsg, ' '.join(ymsg))
+        await sleep(5)
+        if len(bulk) != 0:
+            msg = input_list[:1]
+            msg.append(f'{bulk[0]} -i {multi - 1}')
+            nextmsg = await sendMessage(message, " ".join(msg))
+        else:
+            msg = [s.strip() for s in input_list]
+            index = msg.index('-i')
+            msg[index+1] = f"{multi - 1}"
+            nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=message.reply_to_message_id + 1)
+            nextmsg = await sendMessage(nextmsg, " ".join(msg))
         nextmsg = await client.get_messages(chat_id=message.chat.id, message_ids=nextmsg.id)
-        if len(folder_name) > 0:
-            sameDir.add(nextmsg.id)
+        if folder_name:
+            sameDir['tasks'].add(nextmsg.id)
         nextmsg.from_user = message.from_user
-        await sleep(4)
-        _ytdl(client, nextmsg, isZip, isLeech, sameDir)
+        await sleep(5)
+        _ytdl(client, nextmsg, isLeech, sameDir, bulk)
 
     path = f'{DOWNLOAD_DIR}{message.id}{folder_name}'
 
-    name = mssg.split(' n: ', 1)
-    name = re_split(' pswd: | opt: | up: | rcf: ', name[1])[
-        0].strip() if len(name) > 1 else ''
-
-    pswd = mssg.split(' pswd: ', 1)
-    pswd = re_split(' n: | opt: | up: | rcf: ', pswd[1])[
-        0] if len(pswd) > 1 else None
-
-    opt = mssg.split(' opt: ', 1)
-    opt = re_split(' n: | pswd: | up: | rcf: ', opt[1])[
-        0].strip() if len(opt) > 1 else ''
-
-    rcf = mssg.split(' rcf: ', 1)
-    rcf = re_split(' n: | pswd: | up: | opt: ', rcf[1])[
-        0].strip() if len(rcf) > 1 else None
-
-    up = mssg.split(' up: ', 1)
-    up = re_split(' n: | pswd: | rcf: | opt: ', up[1])[
-        0].strip() if len(up) > 1 else None
-
     opt = opt or config_dict['YT_DLP_OPTIONS']
+
+    if len(text) > 1 and text[1].startswith('Tag: '):
+        tag, id_ = text[1].split('Tag: ')[1].split()
+        message.from_user = await client.get_users(id_)
+        try:
+            await message.unpin()
+        except:
+            pass
 
     if username := message.from_user.username:
         tag = f'@{username}'
     else:
         tag = message.from_user.mention
 
-    if reply_to := message.reply_to_message:
-        if len(link) == 0:
-            link = reply_to.text.split('\n', 1)[0].strip()
-        if not reply_to.from_user.is_bot:
-            if username := reply_to.from_user.username:
-                tag = f'@{username}'
-            else:
-                tag = reply_to.from_user.mention
+    if not link and (reply_to := message.reply_to_message):
+        link = reply_to.text.split('\n', 1)[0].strip()
 
     if not is_url(link):
         await sendMessage(message, YT_HELP_MESSAGE)
         return
 
     if not isLeech:
-        if config_dict['DEFAULT_UPLOAD'] == 'rc' and up is None or up == 'rc':
-            up = config_dict['RCLONE_PATH']
-        if up is None and config_dict['DEFAULT_UPLOAD'] == 'gd':
-            up = 'gd'
-        if up == 'gd' and not config_dict['GDRIVE_ID']:
-            await sendMessage(message, 'GDRIVE_ID not Provided!')
+        user_dict = user_data.get(message.from_user.id, {})
+        default_upload = user_dict.get('default_upload', '')
+        if not up and (default_upload == 'rc' or not default_upload and config_dict['DEFAULT_UPLOAD'] == 'rc') or up == 'rc':
+            up = user_dict.get('rclone_path') or config_dict['RCLONE_PATH']
+        if not up and (default_upload == 'gd' or not default_upload and config_dict['DEFAULT_UPLOAD'] == 'gd') or up == 'gd':
+            up = user_dict.get('gdrive_id') or config_dict['GDRIVE_ID']
+        if not up:
+            await sendMessage(message, 'No Upload Destination!')
             return
-        elif not up:
-            await sendMessage(message, 'No Rclone Destination!')
-            return
-        elif up not in ['rcl', 'gd']:
+        elif up != 'rcl' and is_rclone_path(up):
             if up.startswith('mrcc:'):
                 config_path = f'rclone/{message.from_user.id}.conf'
             else:
                 config_path = 'rclone.conf'
             if not await aiopath.exists(config_path):
-                await sendMessage(message, f'Rclone Config: {config_path} not Exists!')
+                await sendMessage(message, f"Rclone Config: {config_path} not Exists!")
                 return
+        elif up != 'gdl' and is_gdrive_id(up):
+            if up.startswith('mtp:'):
+                token_path = f'tokens/{message.from_user.id}.pickle'
+            else:
+                token_path = 'token.pickle'
+            if not await aiopath.exists(token_path):
+                await sendMessage(message, f"token.pickle: {token_path} not Exists!")
+                return
+        if not is_gdrive_id(up) and not is_rclone_path(up):
+            await sendMessage(message, 'Wrong Upload Destination!')
+            return
+    elif up.isdigit() or up.startswith('-'):
+        up = int(up)
 
     if up == 'rcl' and not isLeech:
         up = await RcloneList(client, message).get_rclone_path('rcu')
@@ -361,7 +383,8 @@ async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
             return
 
     listener = MirrorLeechListener(
-        message, isZip, isLeech=isLeech, pswd=pswd, tag=tag, sameDir=sameDir, rcFlags=rcf, upPath=up)
+        message, compress, isLeech=isLeech, tag=tag, sameDir=sameDir, rcFlags=rcf, upDest=up)
+
     if 'mdisk.me' in link:
         name, link = await _mdisk(link, name)
 
@@ -396,6 +419,7 @@ async def _ytdl(client, message, isZip=False, isLeech=False, sameDir={}):
     __run_multi()
 
     if not select:
+        user_id = message.from_user.id
         user_dict = user_data.get(user_id, {})
         if 'format' in options:
             qual = options['format']
@@ -416,22 +440,11 @@ async def ytdl(client, message):
     _ytdl(client, message)
 
 
-async def ytdlZip(client, message):
-    _ytdl(client, message, True)
-
-
 async def ytdlleech(client, message):
     _ytdl(client, message, isLeech=True)
 
 
-async def ytdlZipleech(client, message):
-    _ytdl(client, message, True, True)
-
 bot.add_handler(MessageHandler(ytdl, filters=command(
     BotCommands.YtdlCommand) & CustomFilters.authorized))
-bot.add_handler(MessageHandler(ytdlZip, filters=command(
-    BotCommands.YtdlZipCommand) & CustomFilters.authorized))
 bot.add_handler(MessageHandler(ytdlleech, filters=command(
     BotCommands.YtdlLeechCommand) & CustomFilters.authorized))
-bot.add_handler(MessageHandler(ytdlZipleech, filters=command(
-    BotCommands.YtdlZipLeechCommand) & CustomFilters.authorized))

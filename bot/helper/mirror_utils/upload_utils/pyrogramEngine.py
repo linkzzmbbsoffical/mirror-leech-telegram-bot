@@ -12,7 +12,7 @@ from re import match as re_match, sub as re_sub
 from natsort import natsorted
 from aioshutil import copy
 
-from bot import config_dict, user_data, GLOBAL_EXTENSION_FILTER, bot, user, IS_PREMIUM_USER
+from bot import config_dict, GLOBAL_EXTENSION_FILTER, bot, user, IS_PREMIUM_USER
 from bot.helper.ext_utils.fs_utils import clean_unwanted, is_archive, get_base_name
 from bot.helper.ext_utils.bot_utils import sync_to_async
 from bot.helper.ext_utils.leech_utils import get_media_info, get_document_type, take_ss
@@ -32,7 +32,7 @@ class TgUploader:
         self.__start_time = time()
         self.__total_files = 0
         self.__is_cancelled = False
-        self.__thumb = f"Thumbnails/{listener.message.from_user.id}.jpg"
+        self.__thumb = f"Thumbnails/{listener.user_id}.jpg"
         self.__msgs_dict = {}
         self.__corrupted = 0
         self.__is_corrupted = False
@@ -42,6 +42,8 @@ class TgUploader:
         self.__lprefix = ''
         self.__as_doc = False
         self.__media_group = False
+        self.__upload_dest = ''
+        self.__user_leech = False
 
     async def __upload_progress(self, current, total):
         if self.__is_cancelled:
@@ -54,33 +56,50 @@ class TgUploader:
         self.__processed_bytes += chunk_size
 
     async def __user_settings(self):
-        user_id = self.__listener.message.from_user.id
-        user_dict = user_data.get(user_id, {})
-        self.__as_doc = user_dict.get('as_doc') or config_dict['AS_DOCUMENT']
-        self.__media_group = user_dict.get(
-            'media_group') or config_dict['MEDIA_GROUP']
-        self.__lprefix = user_dict.get(
-            'lprefix') or config_dict['LEECH_FILENAME_PREFIX']
+        self.__as_doc = self.__listener.user_dict.get(
+            'as_doc', False) or (config_dict['AS_DOCUMENT'] if 'as_doc' not in self.__listener.user_dict else False)
+        self.__media_group = self.__listener.user_dict.get(
+            'media_group') or (config_dict['MEDIA_GROUP'] if 'media_group' not in self.__listener.user_dict else False)
+        self.__lprefix = self.__listener.user_dict.get(
+            'lprefix') or (config_dict['LEECH_FILENAME_PREFIX'] if 'lprefix' not in self.__listener.user_dict else '')
         if not await aiopath.exists(self.__thumb):
             self.__thumb = None
+        if IS_PREMIUM_USER and (self.__listener.user_dict.get('user_leech', False) or 'user_leech' not in self.__listener.user_dict and config_dict['USER_LEECH']):
+            self.__user_leech = True
+        self.__upload_dest = self.__listener.upDest or self.__listener.user_dict.get(
+            'leech_dest') or config_dict['LEECH_DUMP_CHAT']
+        if self.__upload_dest.startswith('b:'):
+            self.__upload_dest = self.__upload_dest.lstrip('b:')
+            self.__user_leech = False
+        elif self.__upload_dest.startswith('u:'):
+            self.__upload_dest = self.__upload_dest.lstrip('u:')
+            self.__user_leech = IS_PREMIUM_USER
+        if self.__upload_dest.isdigit() or self.__upload_dest.startswith('-'):
+            self.__upload_dest = int(self.__upload_dest)
 
     async def __msg_to_reply(self):
-        if DUMP_CHAT_ID := config_dict['DUMP_CHAT_ID']:
-            msg = self.__listener.message.link if self.__listener.isSuperGroup else self.__listener.message.text
-            if IS_PREMIUM_USER:
-                self.__sent_msg = await user.send_message(chat_id=DUMP_CHAT_ID, text=msg,
-                                                          disable_web_page_preview=False, disable_notification=True)
-            else:
-                self.__sent_msg = await bot.send_message(chat_id=DUMP_CHAT_ID, text=msg,
-                                                         disable_web_page_preview=False, disable_notification=True)
-        elif IS_PREMIUM_USER:
+        if self.__upload_dest:
+            msg = self.__listener.message.link if self.__listener.isSuperGroup else self.__listener.message.text.lstrip(
+                '/')
+            try:
+                if self.__user_leech:
+                    self.__sent_msg = await user.send_message(chat_id=self.__upload_dest, text=msg,
+                                                              disable_web_page_preview=False, disable_notification=True)
+                else:
+                    self.__sent_msg = await bot.send_message(chat_id=self.__upload_dest, text=msg,
+                                                             disable_web_page_preview=False, disable_notification=True)
+            except Exception as e:
+                await self.__listener.onUploadError(str(e))
+                return False
+        elif self.__user_leech:
             if not self.__listener.isSuperGroup:
                 await self.__listener.onUploadError('Use SuperGroup to leech with User!')
-                return
+                return False
             self.__sent_msg = await user.get_messages(chat_id=self.__listener.message.chat.id,
                                                       message_ids=self.__listener.uid)
         else:
             self.__sent_msg = self.__listener.message
+        return True
 
     async def __prepare_file(self, file_, dirpath):
         if self.__lprefix:
@@ -147,14 +166,16 @@ class TgUploader:
                 del self.__msgs_dict[msg.link]
             await msg.delete()
         del self.__media_dict[key][subkey]
-        if self.__listener.isSuperGroup or config_dict['DUMP_CHAT_ID']:
+        if self.__listener.isSuperGroup or self.__upload_dest:
             for m in msgs_list:
                 self.__msgs_dict[m.link] = m.caption
         self.__sent_msg = msgs_list[-1]
 
     async def upload(self, o_files, m_size, size):
-        await self.__msg_to_reply()
         await self.__user_settings()
+        res = await self.__msg_to_reply()
+        if not res:
+            return
         for dirpath, _, files in sorted(await sync_to_async(walk, self.__path)):
             if dirpath.endswith('/yt-dlp-thumb'):
                 continue
@@ -189,7 +210,7 @@ class TgUploader:
                     await self.__upload_file(cap_mono, file_)
                     if self.__is_cancelled:
                         return
-                    if not self.__is_corrupted and (self.__listener.isSuperGroup or config_dict['DUMP_CHAT_ID']):
+                    if not self.__is_corrupted and (self.__listener.isSuperGroup or self.__upload_dest):
                         self.__msgs_dict[self.__sent_msg.link] = file_
                     await sleep(1)
                 except Exception as err:
@@ -263,7 +284,7 @@ class TgUploader:
                 else:
                     width = 480
                     height = 320
-                if not self.__up_path.upper().endswith(("MKV", "MP4")):
+                if not self.__up_path.upper().endswith(("MP4", "MKV")):
                     dirpath, file_ = self.__up_path.rsplit('/', 1)
                     if self.__listener.seed and not self.__listener.newDir and not dirpath.endswith("/splited_files_mltb"):
                         dirpath = f"{dirpath}/copied_mltb"

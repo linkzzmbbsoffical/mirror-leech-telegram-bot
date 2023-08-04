@@ -11,12 +11,12 @@ from subprocess import Popen, run as srun
 from os import remove as osremove, path as ospath, environ, getcwd
 from aria2p import API as ariaAPI, Client as ariaClient
 from qbittorrentapi import Client as qbClient
-# from faulthandler import enable as faulthandler_enable
+from faulthandler import enable as faulthandler_enable
 from socket import setdefaulttimeout
 from logging import getLogger, FileHandler, StreamHandler, INFO, basicConfig, error as log_error, info as log_info, warning as log_warning
 from uvloop import install
 
-# faulthandler_enable()
+faulthandler_enable()
 install()
 setdefaulttimeout(600)
 
@@ -36,7 +36,7 @@ QbTorrents = {}
 DRIVES_NAMES = []
 DRIVES_IDS = []
 INDEX_URLS = []
-GLOBAL_EXTENSION_FILTER = ['aria2']
+GLOBAL_EXTENSION_FILTER = ['aria2', '!qB']
 user_data = {}
 aria2_options = {}
 qbit_options = {}
@@ -165,8 +165,7 @@ EXTENSION_FILTER = environ.get('EXTENSION_FILTER', '')
 if len(EXTENSION_FILTER) > 0:
     fx = EXTENSION_FILTER.split()
     for x in fx:
-        if x.strip().startswith('.'):
-            x = x.lstrip('.')
+        x = x.lstrip('.')
         GLOBAL_EXTENSION_FILTER.append(x.strip().lower())
 
 IS_PREMIUM_USER = False
@@ -175,7 +174,7 @@ USER_SESSION_STRING = environ.get('USER_SESSION_STRING', '')
 if len(USER_SESSION_STRING) != 0:
     log_info("Creating client from USER_SESSION_STRING")
     user = tgClient('user', TELEGRAM_API, TELEGRAM_HASH, session_string=USER_SESSION_STRING,
-                    parse_mode=enums.ParseMode.HTML, no_updates=True, max_concurrent_transmissions=1000).start()
+                    parse_mode=enums.ParseMode.HTML, max_concurrent_transmissions=1000).start()
     IS_PREMIUM_USER = user.me.is_premium
 
 MEGA_EMAIL = environ.get('MEGA_EMAIL', '')
@@ -208,7 +207,7 @@ if len(SEARCH_PLUGINS) == 0:
 MAX_SPLIT_SIZE = 4194304000 if IS_PREMIUM_USER else 2097152000
 
 LEECH_SPLIT_SIZE = environ.get('LEECH_SPLIT_SIZE', '')
-if len(LEECH_SPLIT_SIZE) == 0 or int(LEECH_SPLIT_SIZE) > MAX_SPLIT_SIZE:
+if len(LEECH_SPLIT_SIZE) == 0 or int(LEECH_SPLIT_SIZE) > MAX_SPLIT_SIZE or LEECH_SPLIT_SIZE == '2097152000':
     LEECH_SPLIT_SIZE = MAX_SPLIT_SIZE
 else:
     LEECH_SPLIT_SIZE = int(LEECH_SPLIT_SIZE)
@@ -232,16 +231,20 @@ if len(YT_DLP_OPTIONS) == 0:
 SEARCH_LIMIT = environ.get('SEARCH_LIMIT', '')
 SEARCH_LIMIT = 0 if len(SEARCH_LIMIT) == 0 else int(SEARCH_LIMIT)
 
-DUMP_CHAT_ID = environ.get('DUMP_CHAT_ID', '')
-DUMP_CHAT_ID = '' if len(DUMP_CHAT_ID) == 0 else int(DUMP_CHAT_ID)
+LEECH_DUMP_CHAT = environ.get('LEECH_DUMP_CHAT', '')
+LEECH_DUMP_CHAT = '' if len(LEECH_DUMP_CHAT) == 0 else LEECH_DUMP_CHAT
+if LEECH_DUMP_CHAT.isdigit() or LEECH_DUMP_CHAT.startswith('-'):
+    LEECH_DUMP_CHAT = int(LEECH_DUMP_CHAT)
 
 STATUS_LIMIT = environ.get('STATUS_LIMIT', '')
 STATUS_LIMIT = 10 if len(STATUS_LIMIT) == 0 else int(STATUS_LIMIT)
 
 CMD_SUFFIX = environ.get('CMD_SUFFIX', '')
 
-RSS_CHAT_ID = environ.get('RSS_CHAT_ID', '')
-RSS_CHAT_ID = '' if len(RSS_CHAT_ID) == 0 else int(RSS_CHAT_ID)
+RSS_CHAT = environ.get('RSS_CHAT', '')
+RSS_CHAT = '' if len(RSS_CHAT) == 0 else RSS_CHAT
+if RSS_CHAT.isdigit() or RSS_CHAT.startswith('-'):
+    RSS_CHAT = int(RSS_CHAT)
 
 RSS_DELAY = environ.get('RSS_DELAY', '')
 RSS_DELAY = 900 if len(RSS_DELAY) == 0 else int(RSS_DELAY)
@@ -281,6 +284,9 @@ EQUAL_SPLITS = EQUAL_SPLITS.lower() == 'true'
 
 MEDIA_GROUP = environ.get('MEDIA_GROUP', '')
 MEDIA_GROUP = MEDIA_GROUP.lower() == 'true'
+
+USER_LEECH = environ.get('USER_LEECH', '')
+USER_LEECH = USER_LEECH.lower() == 'true' and IS_PREMIUM_USER
 
 BASE_URL_PORT = environ.get('BASE_URL_PORT', '')
 BASE_URL_PORT = 80 if len(BASE_URL_PORT) == 0 else int(BASE_URL_PORT)
@@ -324,13 +330,13 @@ config_dict = {'AS_DOCUMENT': AS_DOCUMENT,
                'DATABASE_URL': DATABASE_URL,
                'DEFAULT_UPLOAD': DEFAULT_UPLOAD,
                'DOWNLOAD_DIR': DOWNLOAD_DIR,
-               'DUMP_CHAT_ID': DUMP_CHAT_ID,
                'EQUAL_SPLITS': EQUAL_SPLITS,
                'EXTENSION_FILTER': EXTENSION_FILTER,
                'GDRIVE_ID': GDRIVE_ID,
                'INCOMPLETE_TASK_NOTIFIER': INCOMPLETE_TASK_NOTIFIER,
                'INDEX_URL': INDEX_URL,
                'IS_TEAM_DRIVE': IS_TEAM_DRIVE,
+               'LEECH_DUMP_CHAT': LEECH_DUMP_CHAT,
                'LEECH_FILENAME_PREFIX': LEECH_FILENAME_PREFIX,
                'LEECH_SPLIT_SIZE': LEECH_SPLIT_SIZE,
                'MEDIA_GROUP': MEDIA_GROUP,
@@ -346,7 +352,7 @@ config_dict = {'AS_DOCUMENT': AS_DOCUMENT,
                'RCLONE_SERVE_USER': RCLONE_SERVE_USER,
                'RCLONE_SERVE_PASS': RCLONE_SERVE_PASS,
                'RCLONE_SERVE_PORT': RCLONE_SERVE_PORT,
-               'RSS_CHAT_ID': RSS_CHAT_ID,
+               'RSS_CHAT': RSS_CHAT,
                'RSS_DELAY': RSS_DELAY,
                'SEARCH_API_LINK': SEARCH_API_LINK,
                'SEARCH_LIMIT': SEARCH_LIMIT,
@@ -358,6 +364,7 @@ config_dict = {'AS_DOCUMENT': AS_DOCUMENT,
                'TELEGRAM_API': TELEGRAM_API,
                'TELEGRAM_HASH': TELEGRAM_HASH,
                'TORRENT_TIMEOUT': TORRENT_TIMEOUT,
+               'USER_LEECH': USER_LEECH,
                'UPSTREAM_REPO': UPSTREAM_REPO,
                'UPSTREAM_BRANCH': UPSTREAM_BRANCH,
                'UPTOBOX_TOKEN': UPTOBOX_TOKEN,
